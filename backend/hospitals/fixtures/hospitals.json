@@ -1,0 +1,7 @@
+[
+  {"model": "hospitals.hospital", "pk": 1, "fields": {"name": "Muhimbili National Hospital", "type": "public", "services": "Full maternity, NICU", "phone": "+255222150610", "address": "Dar es Salaam", "latitude": -6.8000, "longitude": 39.2833, "is_active": true}},
+  {"model": "hospitals.hospital", "pk": 2, "fields": {"name": "Aga Khan Hospital Dar es Salaam", "type": "private", "services": "Full maternity, NICU", "phone": "+255222860000", "address": "Ocean Road, Dar es Salaam", "latitude": -6.8235, "longitude": 39.2942, "is_active": true}},
+  {"model": "hospitals.hospital", "pk": 3, "fields": {"name": "Temeke Regional Hospital", "type": "public", "services": "Maternity", "phone": "+255222865000", "address": "Temeke, Dar es Salaam", "latitude": -6.8740, "longitude": 39.2887, "is_active": true}},
+  {"model": "hospitals.hospital", "pk": 4, "fields": {"name": "Amana Regional Referral Hospital", "type": "public", "services": "Maternity & Emergency", "phone": "+255222860123", "address": "Ilala, Dar es Salaam", "latitude": -6.8103, "longitude": 39.2530, "is_active": true}},
+  {"model": "hospitals.hospital", "pk": 5, "fields": {"name": "Regency Medical Centre", "type": "private", "services": "Full maternity", "phone": "+255222600000", "address": "Dar es Salaam", "latitude": -6.7924, "longitude": 39.2083, "is_active": true}}
+]

@@ -1,0 +1,27 @@
+# Gitignore for Mimba Yangu project
+
+# Python
+*.pyc
+__pycache__/
+.Python
+.venv/
+venv/
+env/
+
+# Django
+*.log
+*.pot
+*.mo
+*.sqlite3
+db.sqlite3
+/media/
+
+# Node / Frontend
+node_modules/
+dist/
+.vite/
+frontend/.env
+frontend/.env.production
+
+# Environment variables
+backend/.env

@@ -1,0 +1,295 @@
+/* ════════════════════════════════════
+   TRACK PAGE
+   ════════════════════════════════════ */
+.track-page {
+  min-height: 100dvh;
+  padding-bottom: 96px;
+  background: var(--bg-page);
+  display: flex;
+  justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.25s ease;
+}
+
+.track-inner {
+  width: 100%;
+  max-width: 480px;
+  padding: 24px 20px;
+}
+
+/* ── Header ── */
+.track-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  animation: fadeUp 0.35s ease both;
+}
+
+.track-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.header-controls {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Section cards ── */
+.track-card {
+  background: var(--bg-card);
+  border: 0.5px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 12px;
+  transition: background 0.25s ease;
+}
+
+.track-card:nth-child(2) { animation: fadeUp 0.35s 0.05s ease both; }
+.track-card:nth-child(3) { animation: fadeUp 0.35s 0.10s ease both; }
+.track-card:nth-child(4) { animation: fadeUp 0.35s 0.15s ease both; }
+.track-card:nth-child(5) { animation: fadeUp 0.35s 0.20s ease both; }
+
+.track-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.track-tool-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.track-tool-card .track-card-sub {
+  margin-bottom: 0;
+}
+
+.track-tool-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--bg-pink);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.track-card-sub {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 16px;
+  line-height: 1.55;
+}
+
+/* ── Mood selector ── */
+.mood-row {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.mood-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 4px;
+  border-radius: 12px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-page);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.mood-btn:active { transform: scale(0.93); }
+
+.mood-btn.active {
+  background: var(--bg-pink);
+  border-color: var(--border-pink);
+}
+
+.mood-emoji { font-size: 26px; line-height: 1; }
+
+.mood-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+.mood-btn.active .mood-label { color: var(--text-pink); }
+
+/* ── Weight input ── */
+.weight-wrap {
+  position: relative;
+}
+
+.weight-prefix {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.weight-input {
+  width: 100%;
+  padding: 12px 14px 12px 40px;
+  background: var(--bg-page);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.25s ease;
+}
+
+.weight-input::placeholder { color: var(--text-tertiary); }
+.weight-input:focus        { border-color: var(--accent); }
+
+/* ── Symptom chips ── */
+.symptom-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.symptom-chip {
+  padding: 7px 14px;
+  border-radius: 100px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-page);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.symptom-chip:active { transform: scale(0.95); }
+
+.symptom-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ── Notes textarea ── */
+.notes-textarea {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-page);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  outline: none;
+  resize: none;
+  min-height: 100px;
+  line-height: 1.65;
+  transition: border-color 0.2s ease, background 0.25s ease;
+}
+
+.notes-textarea::placeholder { color: var(--text-tertiary); }
+.notes-textarea:focus        { border-color: var(--accent); }
+
+.track-error {
+  margin: 2px 0 12px;
+  padding: 11px 13px;
+  border: 0.5px solid #fecdd3;
+  border-radius: 12px;
+  background: #fff1f2;
+  color: #be123c;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* ── CTA ── */
+.track-cta {
+  margin-top: 8px;
+  animation: fadeUp 0.35s 0.25s ease both;
+}
+
+/* ── Saved success state ── */
+.track-saved {
+  min-height: 100dvh;
+  background: var(--bg-page);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 14px;
+  transition: background 0.25s ease;
+}
+
+.saved-bubble {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--bg-green, #EDFAF3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  animation: popIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.3); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.saved-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-primary);
+  animation: fadeUp 0.4s 0.2s ease both;
+}
+
+.saved-sub {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  line-height: 1.7;
+  max-width: 260px;
+  animation: fadeUp 0.4s 0.3s ease both;
+}
+
+/* ── Loader ── */
+.track-spin {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+@keyframes spin  { to { transform: rotate(360deg); } }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

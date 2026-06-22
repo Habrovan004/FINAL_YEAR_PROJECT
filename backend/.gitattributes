@@ -1,0 +1,5 @@
+# Set default line endings for Python and TypeScript files
+* text=auto eol=lf
+*.py text eol=lf
+*.tsx text eol=lf
+*.ts text eol=lf

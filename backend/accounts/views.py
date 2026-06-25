@@ -19,6 +19,42 @@ from tracking.models import SymptomReport
 from emergency.models import EmergencyLog
 from medication.models import MedicationReminder
 from .sms import send_otp_sms
+from .email_otp import send_otp_email
+
+
+def _deliver_otp(user, code, channel: str, purpose: str = 'verification') -> str:
+    """Send the OTP via 'sms' or 'email'. Returns the channel actually used.
+
+    Falls back to the alternate channel if the requested one fails or is unavailable.
+    """
+    requested = (channel or 'sms').lower()
+
+    def try_email():
+        if not user.email:
+            return False
+        try:
+            send_otp_email(user.email, code, purpose=purpose)
+            return True
+        except Exception as e:
+            print(f"[OTP] Email delivery failed for {user.email}: {e}")
+            return False
+
+    def try_sms():
+        try:
+            send_otp_sms(user.phone_number, code)
+            return True
+        except Exception as e:
+            print(f"[OTP] SMS delivery failed for {user.phone_number}: {e}")
+            return False
+
+    if requested == 'email':
+        if try_email():
+            return 'email'
+        return 'sms' if try_sms() else 'none'
+
+    if try_sms():
+        return 'sms'
+    return 'email' if try_email() else 'none'
 
 
 def generate_invitation_code():
@@ -33,29 +69,32 @@ def generate_invitation_code():
 @permission_classes([AllowAny])
 @throttle_classes([OTPRequestThrottle])
 def send_otp(request):
-    """Resend OTP code to phone number"""
+    """Resend OTP code via SMS or email.
+
+    Body: { phone_number, channel: 'sms' | 'email' (default 'sms') }
+    """
     phone_number = request.data.get('phone_number')
+    channel = (request.data.get('channel') or 'sms').lower()
     if not phone_number:
         return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.get(phone_number=phone_number)
+        if channel == 'email' and not user.email:
+            return Response({'error': 'No email address on file for this account.'}, status=status.HTTP_400_BAD_REQUEST)
+
         otp = OTPCode.generate_for_user(user)
+        used_channel = _deliver_otp(user, otp.code, channel)
 
-        # Attempt to send SMS, but don't crash if it fails
-        try:
-            send_otp_sms(user.phone_number, otp.code)
-        except Exception as e:
-            print(f"CRITICAL: SMS delivery failed, but OTP generation continued. Error: {e}")
-
-        # ALWAYS include the code in the terminal during development
+        # Always print the code in the dev terminal
         print(f"\n******************************************")
-        print(f"VERIFICATION CODE FOR {user.phone_number}: {otp.code}")
+        print(f"VERIFICATION CODE FOR {user.phone_number}: {otp.code}  (via {used_channel})")
         print(f"******************************************\n")
 
-        response_data = {'message': 'OTP code sent successfully.'}
-
-        # Expose OTP in JSON response only if DEBUG is True
+        response_data = {
+            'message': f'OTP code sent via {used_channel}.',
+            'channel': used_channel,
+        }
         if settings.DEBUG:
             response_data['dev_otp'] = otp.code
 
@@ -71,21 +110,27 @@ def send_otp(request):
 @permission_classes([AllowAny])
 @throttle_classes([PasswordResetThrottle])
 def request_password_reset(request):
-    """Generate and send a password reset OTP to the user's phone number."""
+    """Generate and send a password reset OTP via SMS or email.
+
+    Body: { phone_number, channel: 'sms' | 'email' (default 'sms') }
+    """
     phone_number = request.data.get('phone_number')
+    channel = (request.data.get('channel') or 'sms').lower()
     if not phone_number:
         return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.get(phone_number=phone_number)
+        if channel == 'email' and not user.email:
+            return Response({'error': 'No email address on file for this account.'}, status=status.HTTP_400_BAD_REQUEST)
+
         otp = OTPCode.generate_for_user(user)
+        used_channel = _deliver_otp(user, otp.code, channel, purpose='password_reset')
 
-        try:
-            send_otp_sms(user.phone_number, otp.code)
-        except Exception as e:
-            print(f"CRITICAL: SMS delivery failed for password reset. Error: {e}")
-
-        response_data = {'message': 'Password reset code sent.'}
+        response_data = {
+            'message': f'Password reset code sent via {used_channel}.',
+            'channel': used_channel,
+        }
         if settings.DEBUG:
             response_data['dev_otp'] = otp.code
         return Response(response_data, status=status.HTTP_200_OK)
@@ -128,23 +173,20 @@ def register(request):
         user = serializer.save()
         otp = OTPCode.generate_for_user(user)
 
-        # Attempt to send SMS, but don't crash if it fails
-        try:
-            send_otp_sms(user.phone_number, otp.code)
-        except Exception as e:
-            print(f"CRITICAL: SMS delivery failed, but registration continued. Error: {e}")
+        # Honour preferred channel if provided; default to SMS but fall back to email
+        channel = (request.data.get('verification_channel') or 'sms').lower()
+        used_channel = _deliver_otp(user, otp.code, channel)
 
         response_data = {
-            'message': 'Account created. Please verify your phone number.',
+            'message': f'Account created. Verification code sent via {used_channel}.',
             'user': UserSerializer(user).data,
+            'channel': used_channel,
         }
 
-        # ALWAYS include the code in the terminal during development
         print(f"\n******************************************")
-        print(f"VERIFICATION CODE FOR {user.phone_number}: {otp.code}")
+        print(f"VERIFICATION CODE FOR {user.phone_number}: {otp.code}  (via {used_channel})")
         print(f"******************************************\n")
 
-        # Expose OTP in JSON response only if DEBUG is True
         if settings.DEBUG:
             response_data['dev_otp'] = otp.code
 

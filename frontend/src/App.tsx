@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Languages, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { AuthProvider, useAuth } from './context/AuthContext'
+import { AuthProvider, useAuth, dashboardPathFor } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 
 // Global styles
@@ -28,46 +28,43 @@ import PartnerSupport from './pages/Profile/PartnerSupport'
 import SettingsPage from './pages/Profile/SettingsPage'
 import HospitalMap from './pages/Profile/HospitalMap'
 import PreferencesPage from './pages/Profile/PreferencesPage'
+import ChatPage from './pages/Chat/ChatPage'
+import ProviderDashboard from './pages/Provider/ProviderDashboard'
+import ProviderChatQueue from './pages/Provider/ProviderChatQueue'
+import ManagerDashboard from './pages/Manager/ManagerDashboard'
 import './App.css'
 
 const queryClient = new QueryClient()
 
-// ── ✅ FIX: PrivateRoute now checks is_verified correctly ─────────────────
-function PrivateRoute({ children }: { children: React.ReactNode }) {
+function Spinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-8 h-8 border-4 border-rose-400 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
+
+// PrivateRoute now restricts by role and routes other roles to their own dashboard
+function PrivateRoute({ children, allow }: { children: React.ReactNode; allow?: string[] }) {
   const { user, isLoading } = useAuth()
-
-  if (isLoading) {
-    return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="w-8 h-8 border-4 border-rose-400 border-t-transparent rounded-full animate-spin" />
-        </div>
-    )
-  }
-
+  if (isLoading) return <Spinner />
   if (!user) return <Navigate to="/" replace />
   if (!user.is_verified) return <Navigate to="/onboarding/verify" replace />
-
+  if (allow && !allow.includes(user.user_type)) {
+    return <Navigate to={dashboardPathFor(user.user_type)} replace />
+  }
   return <>{children}</>
 }
 
-// ── ✅ NEW: OnboardingRoute — must be logged in but not fully onboarded ────
 function OnboardingRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
-
-  if (isLoading) {
-    return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="w-8 h-8 border-4 border-rose-400 border-t-transparent rounded-full animate-spin" />
-        </div>
-    )
-  }
-
+  if (isLoading) return <Spinner />
   if (!user) return <Navigate to="/" replace />
   if (!user.is_verified) return <Navigate to="/onboarding/verify" replace />
-
-  // If already onboarded, skip hospital selection
+  if (user.user_type !== 'patient') {
+    return <Navigate to={dashboardPathFor(user.user_type)} replace />
+  }
   if (user.is_onboarded) return <Navigate to="/home" replace />
-
   return <>{children}</>
 }
 
@@ -120,7 +117,7 @@ function App() {
                 <Route path="/onboarding" element={<OnboardingFlow />} />
                 <Route path="/onboarding/verify" element={<VerifyOTP />} />
 
-                {/* ── ✅ FIX: Hospital route is now protected ── */}
+                {/* ── Mother onboarding (hospital pick) ── */}
                 <Route
                     path="/onboarding/hospital"
                     element={
@@ -130,20 +127,28 @@ function App() {
                     }
                 />
 
-                {/* ── Private routes ── */}
-                <Route path="/home" element={<PrivateRoute><HomePage /></PrivateRoute>} />
-                <Route path="/baby-growth" element={<PrivateRoute><BabyGrowthPage /></PrivateRoute>} />
-                <Route path="/track" element={<PrivateRoute><TrackPage /></PrivateRoute>} />
-                <Route path="/track/contractions" element={<PrivateRoute><ContractionTimerPage /></PrivateRoute>} />
-                <Route path="/timeline" element={<PrivateRoute><TimelinePage /></PrivateRoute>} />
-                <Route path="/learn" element={<PrivateRoute><LearnPage /></PrivateRoute>} />
-                <Route path="/appointments" element={<PrivateRoute><AppointmentsPage /></PrivateRoute>} />
-                <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
-                <Route path="/profile/partner" element={<PrivateRoute><PartnerSupport /></PrivateRoute>} />
-                <Route path="/profile/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
-                <Route path="/profile/preferences" element={<PrivateRoute><PreferencesPage /></PrivateRoute>} />
-                <Route path="/profile/hospitals" element={<PrivateRoute><HospitalMap /></PrivateRoute>} />
-                <Route path="/emergency" element={<PrivateRoute><EmergencyPage /></PrivateRoute>} />
+                {/* ── Mother (patient) routes ── */}
+                <Route path="/home" element={<PrivateRoute allow={['patient']}><HomePage /></PrivateRoute>} />
+                <Route path="/baby-growth" element={<PrivateRoute allow={['patient']}><BabyGrowthPage /></PrivateRoute>} />
+                <Route path="/track" element={<PrivateRoute allow={['patient']}><TrackPage /></PrivateRoute>} />
+                <Route path="/track/contractions" element={<PrivateRoute allow={['patient']}><ContractionTimerPage /></PrivateRoute>} />
+                <Route path="/timeline" element={<PrivateRoute allow={['patient']}><TimelinePage /></PrivateRoute>} />
+                <Route path="/learn" element={<PrivateRoute allow={['patient']}><LearnPage /></PrivateRoute>} />
+                <Route path="/appointments" element={<PrivateRoute allow={['patient']}><AppointmentsPage /></PrivateRoute>} />
+                <Route path="/profile" element={<PrivateRoute allow={['patient']}><ProfilePage /></PrivateRoute>} />
+                <Route path="/profile/partner" element={<PrivateRoute allow={['patient']}><PartnerSupport /></PrivateRoute>} />
+                <Route path="/profile/settings" element={<PrivateRoute allow={['patient']}><SettingsPage /></PrivateRoute>} />
+                <Route path="/profile/preferences" element={<PrivateRoute allow={['patient']}><PreferencesPage /></PrivateRoute>} />
+                <Route path="/profile/hospitals" element={<PrivateRoute allow={['patient']}><HospitalMap /></PrivateRoute>} />
+                <Route path="/emergency" element={<PrivateRoute allow={['patient']}><EmergencyPage /></PrivateRoute>} />
+                <Route path="/chat" element={<PrivateRoute allow={['patient']}><ChatPage /></PrivateRoute>} />
+
+                {/* ── Provider routes ── */}
+                <Route path="/provider/dashboard" element={<PrivateRoute allow={['provider']}><ProviderDashboard /></PrivateRoute>} />
+                <Route path="/provider/chats" element={<PrivateRoute allow={['provider']}><ProviderChatQueue /></PrivateRoute>} />
+
+                {/* ── Hospital Manager routes ── */}
+                <Route path="/manager/dashboard" element={<PrivateRoute allow={['hospital_manager']}><ManagerDashboard /></PrivateRoute>} />
 
                 {/* ── Fallback ── */}
                 <Route path="*" element={<Navigate to="/" replace />} />

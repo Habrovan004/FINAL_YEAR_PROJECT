@@ -20,17 +20,18 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     objects = UserManager()
-    
+
     USER_TYPES = [
-        ('patient', 'Patient'), 
-        ('partner', 'Partner'), 
+        ('patient', 'Mother'),
+        ('partner', 'Partner'),
         ('provider', 'Healthcare Provider'),
-        ('admin', 'Admin')
+        ('hospital_manager', 'Hospital Manager'),
     ]
-    
+
     phone_number = models.CharField(max_length=20, unique=True)
+    email = models.EmailField(blank=True, null=True)
     full_name = models.CharField(max_length=150)
-    user_type = models.CharField(max_length=10, choices=USER_TYPES, default='patient')
+    user_type = models.CharField(max_length=20, choices=USER_TYPES, default='patient')
     date_of_birth = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
     is_verified = models.BooleanField(default=False)
@@ -62,6 +63,17 @@ class ProviderProfile(models.Model):
     def __str__(self):
         # Explicit type conversion to avoid IDE errors
         return "Provider: " + str(self.user.full_name)
+
+class HospitalManagerProfile(models.Model):
+    objects = models.Manager()
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='manager_profile')
+    hospital = models.ForeignKey('hospitals.Hospital', on_delete=models.CASCADE, related_name='managers')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return "Manager: " + str(self.user.full_name)
+
 
 class OTPCode(models.Model):
     objects = models.Manager()

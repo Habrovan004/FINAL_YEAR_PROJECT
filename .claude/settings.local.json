@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd C:\\\\Users\\\\PJ\\\\FINAL_YEAR_PROJECT\\\\backend; $env:DJANGO_SETTINGS_MODULE='config.settings'; python -c \"import django; django.setup\\(\\); from hospitals.models import Hospital; print\\('HOSPITALS:', Hospital.objects.count\\(\\)\\)\" 2>&1 | Select-Object -Last 3)"
+    ]
+  }
+}

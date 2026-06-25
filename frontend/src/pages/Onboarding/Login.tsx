@@ -39,12 +39,12 @@ export default function Login() {
 
       if (userType === 'provider') {
         nav('/provider/dashboard')
-      } else if (userType === 'admin') {
-        nav('/admin/dashboard')
+      } else if (userType === 'hospital_manager') {
+        nav('/manager/dashboard')
       } else if (!isOnboarded) {
-        nav('/onboarding/hospital') // Patient not onboarded — go to hospital selection
+        nav('/onboarding/hospital') // Mother not onboarded — go to hospital selection
       } else {
-        nav('/home') // Patient already onboarded
+        nav('/home') // Mother already onboarded
       }
 
     } catch (err: unknown) {

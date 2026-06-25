@@ -2,14 +2,16 @@ import { createContext, useContext, useState, useEffect } from "react"
 import type { ReactNode } from 'react'
 import api from '../api/client'
 
-// ── ✅ FIX: Added is_onboarded to User interface ──────────────────────────
 interface User {
   id: number
   full_name: string
   phone_number: string
-  user_type: string
+  email?: string | null
+  user_type: 'patient' | 'partner' | 'provider' | 'hospital_manager' | string
   is_verified: boolean
-  is_onboarded: boolean // ✅ Controls hospital selection redirect
+  is_onboarded: boolean
+  hospital_id?: number | null
+  hospital_name?: string | null
 }
 
 interface AuthCtx {
@@ -29,14 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser]       = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // ── Restore session on app load ───────────────────────────────────────────
   useEffect(() => {
     const token = localStorage.getItem('access_token')
     if (token) {
       api.get('/auth/me/')
           .then(r => setUser(r.data))
           .catch(() => {
-            // Token expired or invalid — clear storage
             localStorage.clear()
           })
           .finally(() => setIsLoading(false))
@@ -45,7 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // ── Login ─────────────────────────────────────────────────────────────────
   const login = async (phone_number: string, password: string) => {
     const { data } = await api.post('/auth/login/', { phone_number, password })
     localStorage.setItem('access_token', data.access)
@@ -53,13 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user)
   }
 
-  // ── Register ──────────────────────────────────────────────────────────────
   const register = async (formData: any) => {
     const { data } = await api.post('/auth/register/', formData)
     setUser(data.user)
   }
 
-  // ── Refresh user data from backend ────────────────────────────────────────
   const refreshUser = async () => {
     try {
       const { data } = await api.get('/auth/me/')
@@ -69,7 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // ── Logout ────────────────────────────────────────────────────────────────
   const logout = () => {
     localStorage.clear()
     setUser(null)
@@ -80,4 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         {children}
       </AuthContext.Provider>
   )
+}
+
+export function dashboardPathFor(userType?: string) {
+  if (userType === 'provider') return '/provider/dashboard'
+  if (userType === 'hospital_manager') return '/manager/dashboard'
+  return '/home'
 }

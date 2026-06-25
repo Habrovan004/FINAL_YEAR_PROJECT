@@ -32,8 +32,11 @@ interface SymptomEntry {
   severity: 'mild' | 'moderate' | 'severe';
 }
 
+type SignupRole = 'patient' | 'provider' | 'hospital_manager'
+
 interface FormData {
   full_name: string; date_of_birth: string; phone_number: string; password: string
+  email: string; user_type: SignupRole; specialization: string
   pregnancy_status: string; lmp_date: string; due_date: string
   is_first_pregnancy: boolean; previous_pregnancies: number; previous_complications: string[]
   weight_kg: string; height_cm: string; initial_symptoms: SymptomEntry[]
@@ -71,6 +74,7 @@ export default function OnboardingFlow() {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<FormData>({
     full_name: '', date_of_birth: '', phone_number: '', password: '',
+    email: '', user_type: 'patient', specialization: 'nurse',
     pregnancy_status: 'pregnant', lmp_date: '', due_date: '',
     is_first_pregnancy: true, previous_pregnancies: 0, previous_complications: [],
     weight_kg: '', height_cm: '', initial_symptoms: [],
@@ -92,7 +96,8 @@ export default function OnboardingFlow() {
     setHospitalFetchError('')
     try {
       const res = await api.get(`/hospitals/?lat=${loc[0]}&lng=${loc[1]}`)
-      setHospitals(res.data.length ? res.data : FALLBACK_HOSPITALS)
+      const list = Array.isArray(res.data) ? res.data : []
+      setHospitals(list.length ? list : FALLBACK_HOSPITALS)
     } catch {
       setHospitals(FALLBACK_HOSPITALS)
       setHospitalFetchError('Showing default Dar es Salaam hospitals.')
@@ -104,16 +109,22 @@ export default function OnboardingFlow() {
     let cancelled = false
 
     if (step === 6) {
-      window.navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude]
-            if (cancelled) return
-            void fetchHospitals(loc)
-          },
-          () => {
-            if (!cancelled) void fetchHospitals(DEFAULT_LOCATION)
-          }
-      )
+      // Always start with the default location so hospitals load immediately,
+      // even if the user denies geolocation or the browser stalls on the prompt.
+      void fetchHospitals(DEFAULT_LOCATION)
+
+      // Then upgrade to the precise location in the background, if available.
+      if (window.navigator.geolocation) {
+        window.navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              if (cancelled) return
+              const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude]
+              void fetchHospitals(loc)
+            },
+            () => { /* ignore — default already loaded */ },
+            { timeout: 8000 }
+        )
+      }
     }
 
     return () => { cancelled = true }
@@ -163,15 +174,28 @@ export default function OnboardingFlow() {
          return;
       }
 
-      const { data: regData } = await api.post('/auth/register/', {
+      const payload: any = {
         phone_number: form.phone_number,
         full_name: form.full_name,
+        email: form.email || null,
         date_of_birth: form.date_of_birth || null,
-        password: form.password
-      })
+        password: form.password,
+        user_type: form.user_type,
+      }
+      if (form.user_type !== 'patient') {
+        payload.hospital_id = form.hospital ? parseInt(form.hospital) : null
+      }
+      if (form.user_type === 'provider') {
+        payload.specialization = form.specialization
+      }
+      const { data: regData } = await api.post('/auth/register/', payload)
 
       localStorage.setItem('pending_phone', form.phone_number)
-      localStorage.setItem('onboarding_data', JSON.stringify(form))
+      if (form.user_type === 'patient') {
+        localStorage.setItem('onboarding_data', JSON.stringify(form))
+      } else {
+        localStorage.removeItem('onboarding_data')
+      }
       nav('/onboarding/verify', { state: { phoneNumber: form.phone_number, devOtp: regData.dev_otp } })
     } catch (err) {
       const axiosErr = err as AxiosError
@@ -203,13 +227,18 @@ export default function OnboardingFlow() {
           alert("Password must be at least 6 characters.");
           return;
        }
+       // Non-mothers skip pregnancy-related steps and jump to facility pick
+       if (form.user_type !== 'patient') {
+         setStep(6);
+         return;
+       }
     }
 
     if (step === 2) {
       if (form.pregnancy_status === 'not_now') { setStep(7); return; }
       if (form.pregnancy_status === 'planning') { setStep(3); return; }
     }
-    
+
     if (step === 5) {
       const w = parseFloat(form.weight_kg);
       const h = parseFloat(form.height_cm);
@@ -219,11 +248,22 @@ export default function OnboardingFlow() {
       }
     }
 
+    // Non-mothers submit directly after facility pick
+    if (step === 6 && form.user_type !== 'patient') {
+      if (!form.hospital) {
+        alert('Please select your facility.')
+        return
+      }
+      void handleFinish()
+      return
+    }
+
     if (step < TOTAL_STEPS) setStep(s => s + 1)
     else void handleFinish()
   }
 
   const back = () => {
+    if (step === 6 && form.user_type !== 'patient') { setStep(1); return; }
     if (step === 7 && form.pregnancy_status === 'not_now') { setStep(2); return; }
     if (step > 1) {
       setStep(s => s - 1)
@@ -236,9 +276,12 @@ export default function OnboardingFlow() {
   const formatDateLabel = (d: string) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 
   // Hospital Logic
-  const filteredHospitals = hospitals.filter(h => {
-    const matchesSearch = h.name.toLowerCase().includes(search.toLowerCase()) || h.address.toLowerCase().includes(search.toLowerCase())
-    const matchesType = typeFilter === 'all' || h.type.toLowerCase() === typeFilter
+  const hospitalList = Array.isArray(hospitals) ? hospitals : []
+  const filteredHospitals = hospitalList.filter(h => {
+    if (!h || !h.name) return false
+    const addr = h.address || ''
+    const matchesSearch = h.name.toLowerCase().includes(search.toLowerCase()) || addr.toLowerCase().includes(search.toLowerCase())
+    const matchesType = typeFilter === 'all' || (h.type || '').toLowerCase() === typeFilter
     return matchesSearch && matchesType
   }).sort((a, b) => (a.distance_km || 0) - (b.distance_km || 0))
 
@@ -281,8 +324,39 @@ export default function OnboardingFlow() {
               <>
                 <div className="ob-titles"><span className="ob-eyebrow">Account</span><h2 className="ob-title">{t('setup_account')}</h2><p className="ob-subtitle">{t('details_or')} <Link to="/login">{t('login_here')}</Link></p></div>
                 <div className="ob-field-group">
+                  <div>
+                    <label className="field-label">I am signing up as</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { v: 'patient', label: 'Mother' },
+                        { v: 'provider', label: 'Provider' },
+                        { v: 'hospital_manager', label: 'Manager' },
+                      ] as { v: SignupRole; label: string }[]).map(r => (
+                        <button
+                          key={r.v}
+                          type="button"
+                          onClick={() => update('user_type', r.v)}
+                          className={`field-input text-center text-[11px] font-bold ${form.user_type === r.v ? 'bg-rose-50 border-rose-400 text-rose-500' : ''}`}
+                          style={{ padding: '10px 4px' }}
+                        >{r.label}</button>
+                      ))}
+                    </div>
+                  </div>
                   <div><label className="field-label" htmlFor="full_name">{t('full_name')}</label><input id="full_name" className="field-input" placeholder="e.g. Amani Wanjiku" value={form.full_name} onChange={e => update('full_name', e.target.value)} /></div>
-                  <div><label className="field-label" htmlFor="dob">{t('dob')}</label><input id="dob" className="field-input" type="date" value={form.date_of_birth} onChange={e => update('date_of_birth', e.target.value)} /></div>
+                  <div><label className="field-label" htmlFor="email">Email <span className="text-gray-400">(optional)</span></label><input id="email" className="field-input" type="email" placeholder="you@example.com" value={form.email} onChange={e => update('email', e.target.value)} /></div>
+                  {form.user_type === 'patient' && (
+                    <div><label className="field-label" htmlFor="dob">{t('dob')}</label><input id="dob" className="field-input" type="date" value={form.date_of_birth} onChange={e => update('date_of_birth', e.target.value)} /></div>
+                  )}
+                  {form.user_type === 'provider' && (
+                    <div>
+                      <label className="field-label">Specialization</label>
+                      <select className="field-input" value={form.specialization} onChange={e => update('specialization', e.target.value)}>
+                        <option value="nurse">Nurse Practitioner</option>
+                        <option value="midwife">Midwife</option>
+                        <option value="obstetrician">Obstetrician</option>
+                      </select>
+                    </div>
+                  )}
                   <div><label className="field-label" htmlFor="phone">{t('phone_number')}</label><input id="phone" className="field-input" placeholder="+255 712 345 678" value={form.phone_number} onChange={e => update('phone_number', e.target.value)} /></div>
                   <div><label className="field-label" htmlFor="password">{t('password')}</label><input id="password" className="field-input" type="password" placeholder="Min 6 characters" value={form.password} onChange={e => update('password', e.target.value)} /></div>
                 </div>
@@ -371,19 +445,22 @@ export default function OnboardingFlow() {
                             <span>{hospitalFetchError}</span>
                           </div>
                         )}
-                        {filteredHospitals.map(h => (
+                        {filteredHospitals.map(h => {
+                          const hType = (h.type || 'public').toLowerCase()
+                          return (
                           <button key={h.id} onClick={() => update('hospital', h.id.toString())} className={`ob-hospital-card ${form.hospital === h.id.toString() ? 'active' : ''}`}>
                             <div className="ob-h-top">
                               <p className="ob-h-name">{h.name}</p>
-                              <span className={`ob-h-badge ${h.type.toLowerCase()}`}>{h.type}</span>
+                              <span className={`ob-h-badge ${hType}`}>{h.type || 'public'}</span>
                             </div>
-                            <div className="ob-h-meta"><MapPin size={10} /> {h.address}</div>
+                            <div className="ob-h-meta"><MapPin size={10} /> {h.address || ''}</div>
                             <div className="flex items-center justify-between">
-                              <p className="ob-h-dist">{h.distance_km} km away</p>
+                              <p className="ob-h-dist">{h.distance_km != null ? `${h.distance_km} km away` : ''}</p>
                               {form.hospital === h.id.toString() && <CheckCircle2 size={16} className="text-rose-500" />}
                             </div>
                           </button>
-                        ))}
+                          )
+                        })}
                     </div>
                 )}
               </div>

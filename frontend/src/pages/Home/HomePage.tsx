@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Bell, ChevronRight, Loader2,
-  Heart, Activity, Calendar, PhoneCall,
+  Heart, Calendar, PhoneCall,
   Moon, Sun, Droplets, Apple, ShieldCheck,
-  Leaf, BookOpen, Users, AlertTriangle,
+  Leaf, BookOpen, Users, AlertTriangle, MessageCircle,
 } from 'lucide-react'
 import PageWrapper from '../../components/layout/PageWrapper'
 import api from '../../api/client'
@@ -103,10 +103,10 @@ export default function HomePage() {
   const trimester = pregnancy_info?.trimester ?? 'N/A'
 
   const QUICK_ACTIONS = [
-    { icon: Heart,     label: 'How do you feel?', sub: 'Log mood and comfort', to: '/track' },
-    { icon: Activity,  label: 'Track symptoms',   sub: 'Check warning signs',  to: '/track' },
-    { icon: Calendar,  label: 'Visits',           sub: 'ANC and appointments', to: '/appointments' },
-    { icon: PhoneCall, label: 'SOS',              sub: 'Emergency help now',   to: '/emergency', danger: true },
+    { icon: Heart,         label: 'How do you feel?', sub: 'Log mood and comfort', to: '/track' },
+    { icon: MessageCircle, label: 'Chat',             sub: 'Health Assistant + provider', to: '/chat' },
+    { icon: Calendar,      label: 'Visits',           sub: 'ANC and appointments', to: '/appointments' },
+    { icon: PhoneCall,     label: 'SOS',              sub: 'Emergency help now',   to: '/emergency', danger: true },
   ]
 
   const TODAY_TIPS = [

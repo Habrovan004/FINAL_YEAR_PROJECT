@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ArrowLeft, Loader2, Moon, Sun, Mail, Phone } from 'lucide-react'
+import { ArrowLeft, Loader2, Mail, Phone } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
-import { useTheme } from '../../context/ThemeContext'
 import './auth.css'
 
 interface LocationState {
   phoneNumber: string
-  devOtp?: string
+  channel?: 'sms' | 'email'
+  email?: string | null
 }
 
 const OTP_LENGTH = 6
@@ -44,19 +45,20 @@ const getApiErrorMessage = (err: unknown, fallback: string) => {
 export default function VerifyOTP() {
   const nav      = useNavigate()
   const location = useLocation()
-  const { dark, toggle } = useTheme()
   const { setUser } = useAuth()
+  const { t } = useTranslation()
 
-  const { phoneNumber, devOtp } = (location.state as LocationState) || {
+  const state: LocationState = (location.state as LocationState) || {
     phoneNumber: localStorage.getItem('pending_phone') || '',
   }
+  const { phoneNumber, channel: initialChannel, email } = state
 
   const [digits, setDigits]     = useState<string[]>(Array(OTP_LENGTH).fill(''))
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [verified, setVerified] = useState(false)
   const [resent, setResent]     = useState(false)
-  const [channel, setChannel]   = useState<'sms' | 'email'>('sms')
+  const [channel, setChannel]   = useState<'sms' | 'email'>(initialChannel === 'email' ? 'email' : 'sms')
   const [resentChannel, setResentChannel] = useState<'sms' | 'email' | null>(null)
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -215,26 +217,20 @@ export default function VerifyOTP() {
     return (
         <div className="auth-page otp-page otp-success">
           <div className="success-bubble" role="img" aria-label="Success">✅</div>
-          <h2 className="success-title">Verified!</h2>
+          <h2 className="success-title">{t('verified')}</h2>
           <p className="success-sub">
-            Welcome to Mimba Yangu.<br />
-            Redirecting you…
+            {t('welcome_to_mimba')}<br />
+            {t('redirecting')}
           </p>
         </div>
     )
   }
 
   // ── Main screen ───────────────────────────────────────────────────────────
+  const destination = channel === 'email' ? (email || phoneNumber) : phoneNumber
+
   return (
       <div className="auth-page otp-page">
-        <button
-            className="auth-theme-btn"
-            onClick={toggle}
-            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {dark ? <Sun size={17} /> : <Moon size={17} />}
-        </button>
-
         <div className="otp-header">
           <button className="back-btn" onClick={() => nav(-1)} aria-label="Go back">
             <ArrowLeft size={18} />
@@ -242,86 +238,39 @@ export default function VerifyOTP() {
         </div>
 
         <div className="otp-titles">
-          <h1 className="otp-title">Verify {channel === 'email' ? 'email' : 'phone'}</h1>
+          <h1 className="otp-title">{channel === 'email' ? t('verify_email_title') : t('verify_phone_title')}</h1>
           <p className="otp-subtitle">
-            We sent a 6-digit code via {channel === 'email' ? 'email' : 'SMS'} to{' '}
-            <strong className="otp-phone">{phoneNumber}</strong>
+            {channel === 'email' ? t('otp_subtitle_email') : t('otp_subtitle_sms')}{' '}
+            <strong className="otp-phone">{destination}</strong>
           </p>
         </div>
 
         {/* Channel switcher */}
-        <div style={{
-          background: '#fff',
-          border: '1px solid #f3f4f6',
-          borderRadius: 14,
-          padding: '12px 14px',
-          marginBottom: 16,
-          boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-        }}>
-          <p style={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: '#6b7280',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            marginBottom: 8,
-            textAlign: 'center',
-          }}>
-            Send code via
-          </p>
-          <div style={{ display: 'flex', gap: 8 }}>
+        <div className="otp-channel-card">
+          <p className="otp-channel-label">{t('send_code_via')}</p>
+          <div className="otp-channel-row">
             <button
               type="button"
               onClick={() => { void handleResend('sms') }}
-              style={{
-                flex: 1,
-                padding: '12px 8px',
-                borderRadius: 12,
-                fontSize: 13,
-                fontWeight: 700,
-                border: channel === 'sms' ? '2px solid #f472b6' : '1px solid #e5e7eb',
-                background: channel === 'sms' ? '#fce7f3' : '#fff',
-                color: channel === 'sms' ? '#be185d' : '#374151',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
+              className={`otp-channel-btn ${channel === 'sms' ? 'active sms' : ''}`}
             >
               <Phone size={16} />
-              SMS
+              {t('sms')}
             </button>
             <button
               type="button"
               onClick={() => { void handleResend('email') }}
-              style={{
-                flex: 1,
-                padding: '12px 8px',
-                borderRadius: 12,
-                fontSize: 13,
-                fontWeight: 700,
-                border: channel === 'email' ? '2px solid #6366f1' : '1px solid #e5e7eb',
-                background: channel === 'email' ? '#dbeafe' : '#fff',
-                color: channel === 'email' ? '#1e40af' : '#374151',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
+              className={`otp-channel-btn ${channel === 'email' ? 'active email' : ''}`}
             >
               <Mail size={16} />
-              Email
+              {t('email')}
             </button>
           </div>
         </div>
 
         {/* OTP card */}
         <div className="otp-card">
-          <p className="otp-card-label">Enter OTP code</p>
+          <p className="otp-card-label">{t('enter_otp_code')}</p>
 
           <div className="otp-boxes" onPaste={handlePaste}>
             {digits.map((d, i) => (
@@ -345,19 +294,13 @@ export default function VerifyOTP() {
           {error ? (
               <p className="otp-error" role="alert">{error}</p>
           ) : resent ? (
-              <p className="otp-resent">A new code has been sent via {resentChannel === 'email' ? 'email' : 'SMS'} ✓</p>
+              <p className="otp-resent">
+                {resentChannel === 'email' ? t('code_resent_email') : t('code_resent_sms')} ✓
+              </p>
           ) : (
-              <p className="otp-hint">This code expires in 10 minutes</p>
+              <p className="otp-hint">{t('code_expires_in_10')}</p>
           )}
         </div>
-
-        {/* Dev debug banner */}
-        {devOtp && (
-            <div className="otp-dev-banner">
-              <span className="otp-dev-label">Dev</span>
-              Your code: <strong>{devOtp}</strong>
-            </div>
-        )}
 
         <div className="otp-ctas">
           <button
@@ -366,11 +309,11 @@ export default function VerifyOTP() {
               disabled={loading || code.length < OTP_LENGTH}
           >
             {loading
-                ? <><Loader2 size={16} className="otp-spin" /> Verifying…</>
-                : 'Confirm & Enter'}
+                ? <><Loader2 size={16} className="otp-spin" /> {t('verifying')}</>
+                : t('confirm_and_enter')}
           </button>
           <button className="btn-ghost" onClick={() => { void handleResend() }}>
-            Resend Code{channel === 'email' ? ' via email' : ' via SMS'}
+            {channel === 'email' ? t('resend_via_email') : t('resend_via_sms')}
           </button>
         </div>
       </div>

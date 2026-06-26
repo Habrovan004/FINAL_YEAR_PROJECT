@@ -1,23 +1,12 @@
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, ShieldCheck, Moon, Sun } from 'lucide-react'
-import { useTheme } from '../../context/ThemeContext'
+import { Sparkles, ShieldCheck } from 'lucide-react'
 import './auth.css'
 
 export default function Splash() {
   const nav = useNavigate()
-  const { dark, toggle } = useTheme()
 
   return (
       <div className="auth-page splash-page">
-        {/* Dark mode toggle */}
-        <button
-            className="auth-theme-btn"
-            onClick={toggle}
-            aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {dark ? <Sun size={17} /> : <Moon size={17} />}
-        </button>
-
         {/* Hero */}
         <div style={{ width: '100%', textAlign: 'center' }}>
           <div className="splash-logo" role="img" aria-label="Heart">💗</div>

@@ -42,6 +42,14 @@
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
 }
 
+/* Top-right placement for onboarding / auth pages so the floating widget
+   does not overlap the bottom CTA buttons. */
+.global-controls--top {
+  top: max(16px, env(safe-area-inset-top));
+  bottom: auto;
+  right: max(16px, calc((100vw - 480px) / 2 + 16px));
+}
+
 .counter {
   font-size: 16px;
   padding: 5px 10px;

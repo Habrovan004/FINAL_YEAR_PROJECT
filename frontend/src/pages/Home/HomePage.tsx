@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import {
   Bell, ChevronRight, Loader2,
   Heart, Calendar, PhoneCall,
-  Moon, Sun, Droplets, Apple, ShieldCheck,
+  Droplets, Apple, ShieldCheck,
   Leaf, BookOpen, Users, AlertTriangle, MessageCircle,
 } from 'lucide-react'
 import PageWrapper from '../../components/layout/PageWrapper'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext' // Import Auth
-import { useTheme } from '../../context/ThemeContext'
 import './HomePage.css'
 
 interface DashboardData {
@@ -65,7 +64,6 @@ function formatDate(dateStr: string): string {
 export default function HomePage() {
   const nav = useNavigate()
   const { user } = useAuth() // Get global user
-  const { dark, toggle } = useTheme()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -155,14 +153,6 @@ export default function HomePage() {
               <h1 className="home-name">{firstName} 💗</h1>
             </div>
             <div className="header-controls">
-              <button
-                  className="icon-btn"
-                  onClick={toggle}
-                  aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {dark ? <Sun size={17} /> : <Moon size={17} />}
-              </button>
-
               <button
                   className="icon-btn"
                   aria-label="Notifications"

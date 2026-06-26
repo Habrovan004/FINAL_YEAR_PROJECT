@@ -96,6 +96,14 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+# In development, Vite may fall back to alternate ports (5174, 5175, …) when
+# 5173 is taken. Allow any localhost/127.0.0.1 port while DEBUG is on so the
+# frontend keeps working regardless of which port it ends up on.
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+    ]
 CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
@@ -120,4 +128,42 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+# ── AI (Anthropic Claude) ──────────────────────────────────────────────────
+# Get a key at https://console.anthropic.com/. The chat falls back to a
+# friendly "service unavailable" message if the key is missing or invalid.
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
+ANTHROPIC_MODEL = config('ANTHROPIC_MODEL', default='claude-haiku-4-5-20251001')
+
+# Conversation history sent to the model (covers ~10 user/assistant turns).
+AI_CHAT_HISTORY_LIMIT = config('AI_CHAT_HISTORY_LIMIT', default=20, cast=int)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'chatbot.ai_engine': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'chatbot.views': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+    },
 }

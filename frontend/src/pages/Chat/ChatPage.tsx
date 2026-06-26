@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, AlertCircle, Sparkles, Stethoscope, Loader2 } from 'lucide-react'
-import api from '../../api/client'
+import { ArrowLeft, Send, AlertCircle, Sparkles, Stethoscope, Loader2, WifiOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import api from '../../api/client'
 import './chat.css'
 
 interface Msg {
@@ -25,18 +25,21 @@ interface ConversationResponse {
 
 export default function ChatPage() {
   const nav = useNavigate()
-  const { i18n } = useTranslation()
+  const { i18n, t } = useTranslation()
+  const lang = i18n.language?.startsWith('sw') ? 'sw' : 'en'
   const [convo, setConvo] = useState<ConversationResponse | null>(null)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [aiAvailable, setAiAvailable] = useState(true)
+  const [sendError, setSendError] = useState('')
   const pollRef = useRef<number | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   const open = async () => {
     setLoading(true)
     try {
-      const r = await api.get('/chatbot/conversation/')
+      const r = await api.get(`/chatbot/conversation/?language=${lang}`)
       setConvo(r.data)
     } finally {
       setLoading(false)
@@ -51,9 +54,8 @@ export default function ChatPage() {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => { void open() }, [])
+  useEffect(() => { void open() }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When the conversation is with a live provider, poll every 4s for replies.
   useEffect(() => {
     if (!convo) return
     if (convo.type === 'provider') {
@@ -70,14 +72,14 @@ export default function ChatPage() {
   const send = async () => {
     if (!convo || !text.trim() || sending) return
     setSending(true)
+    setSendError('')
     try {
       const r = await api.post('/chatbot/message/', {
         conversation_id: convo.id,
         content: text,
-        language: i18n.language?.startsWith('sw') ? 'sw' : 'en',
+        language: lang,
       })
       setText('')
-      // Append new messages locally for snappy UX, then refresh from server.
       const updated: ConversationResponse = { ...convo }
       updated.messages = [...convo.messages]
       if (r.data.message) updated.messages.push(r.data.message)
@@ -85,8 +87,13 @@ export default function ChatPage() {
       if (r.data.conversation_type) updated.type = r.data.conversation_type
       if (r.data.escalated) updated.escalated_at = new Date().toISOString()
       setConvo(updated)
+      // Backend tells us whether the AI service is currently reachable.
+      if (typeof r.data.ai_available === 'boolean') {
+        setAiAvailable(r.data.ai_available)
+      }
     } catch (e) {
       console.error(e)
+      setSendError(t('chat_send_failed'))
     } finally {
       setSending(false)
     }
@@ -94,8 +101,8 @@ export default function ChatPage() {
 
   if (loading || !convo) {
     return (
-      <div className="chat-page flex items-center justify-center">
-        <Loader2 className="animate-spin text-rose-400" size={28} />
+      <div className="chat-page chat-loading">
+        <Loader2 className="chat-spin" size={28} />
       </div>
     )
   }
@@ -105,32 +112,45 @@ export default function ChatPage() {
   return (
     <div className="chat-page">
       <header className="chat-header">
-        <button onClick={() => nav('/home')} className="chat-back"><ArrowLeft size={18} /></button>
+        <button onClick={() => nav('/home')} className="chat-back" aria-label={t('back')}>
+          <ArrowLeft size={18} />
+        </button>
         <div className="chat-title">
           <div className="chat-title-row">
             {isLive ? <Stethoscope size={14} /> : <Sparkles size={14} />}
-            <span>{isLive ? (convo.provider_name || 'Provider') : 'Health Assistant'}</span>
+            <span>{isLive ? (convo.provider_name || t('provider')) : t('health_assistant')}</span>
           </div>
           <p className="chat-status">
-            {isLive ? <span className="chat-live"><span className="dot" /> Live with provider</span>
-                    : <span className="chat-bot">Bot — say "I need a doctor" to reach a real provider</span>}
+            {isLive ? (
+              <span className="chat-live"><span className="dot" /> {t('live_with_provider')}</span>
+            ) : (
+              <span className="chat-bot">{t('ai_subtitle')}</span>
+            )}
           </p>
         </div>
       </header>
 
+      {!aiAvailable && !isLive && (
+        <div className="chat-warning-banner" role="status">
+          <WifiOff size={14} />
+          <span>{t('ai_unavailable_banner')}</span>
+        </div>
+      )}
+
       {convo.escalated_at && (
         <div className="chat-escalation-banner">
           <AlertCircle size={14} />
-          <span>This conversation has been escalated to a real provider.</span>
+          <span>{t('escalated_banner')}</span>
         </div>
       )}
 
       <main className="chat-body">
         {convo.messages.map(m => {
           const fromMe = m.sender_type === 'mother'
-          const label = m.sender_type === 'chatbot' ? 'HEALTH ASSISTANT'
-                      : m.sender_type === 'provider' ? (m.sender_name?.toUpperCase() || 'PROVIDER')
-                      : 'YOU'
+          const label =
+            m.sender_type === 'chatbot' ? t('health_assistant').toUpperCase()
+              : m.sender_type === 'provider' ? (m.sender_name?.toUpperCase() || t('provider').toUpperCase())
+                : t('you').toUpperCase()
           return (
             <div key={m.id} className={`bubble-wrap ${fromMe ? 'me' : 'other'}`}>
               <div className={`bubble bubble-${m.sender_type}`}>
@@ -138,7 +158,7 @@ export default function ChatPage() {
                   {m.sender_type === 'chatbot' && <Sparkles size={9} />}
                   {m.sender_type === 'provider' && <Stethoscope size={9} />}
                   {label}
-                  {m.triggered_escalation && ' • ESCALATED'}
+                  {m.triggered_escalation && ` • ${t('escalated_tag')}`}
                 </p>
                 <p className="bubble-text">{m.content}</p>
               </div>
@@ -148,16 +168,22 @@ export default function ChatPage() {
         <div ref={bottomRef} />
       </main>
 
+      {sendError && (
+        <div className="chat-error" role="alert">
+          <AlertCircle size={14} /> <span>{sendError}</span>
+        </div>
+      )}
+
       <footer className="chat-footer">
         <input
           className="chat-input"
-          placeholder={isLive ? 'Message the provider…' : 'Ask about nutrition, danger signs, ANC…'}
+          placeholder={isLive ? t('chat_placeholder_provider') : t('chat_placeholder_ai')}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') void send() }}
         />
-        <button className="chat-send" onClick={() => void send()} disabled={sending || !text.trim()}>
-          {sending ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
+        <button className="chat-send" onClick={() => void send()} disabled={sending || !text.trim()} aria-label={t('send')}>
+          {sending ? <Loader2 className="chat-spin" size={16} /> : <Send size={16} />}
         </button>
       </footer>
     </div>

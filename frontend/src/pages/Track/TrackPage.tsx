@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Clock, Loader2, Scale, FileText, Moon, Sun } from 'lucide-react'
+import { ArrowLeft, Clock, Loader2, Scale, FileText } from 'lucide-react'
 import api from '../../api/client'
-import { useTheme } from '../../context/ThemeContext'
 import '../Onboarding/auth.css' // Corrected import path
 import './TrackPage.css'
 
@@ -23,7 +22,6 @@ interface Symptom {
 
 export default function TrackPage() {
   const nav = useNavigate()
-  const { dark, toggle } = useTheme()
 
   const [mood, setMood]           = useState<number | null>(null)
   const [symptomIds, setSymptomIds] = useState<number[]>([]) // Changed to store IDs
@@ -103,15 +101,7 @@ export default function TrackPage() {
               <ArrowLeft size={18} />
             </button>
             <h1 className="track-title">Daily Check-in</h1>
-            <div className="header-controls">
-              <button
-                  className="icon-btn"
-                  onClick={toggle}
-                  aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {dark ? <Sun size={17} /> : <Moon size={17} />}
-              </button>
-            </div>
+            <span className="track-header-spacer" aria-hidden="true" />
           </header>
 
           <button className="track-card track-tool-card" onClick={() => nav('/track/contractions')}>

@@ -3,8 +3,11 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, MapPin, Building2, Check } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import api from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import "./auth.css";
+import "./SelectHospital.css";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface Hospital {
@@ -42,9 +45,9 @@ const makeIcon = (color: string) =>
     });
 
 // Create icons once and reuse them (performance optimization)
-const selectedIcon = makeIcon("#e05c7a");
-const publicIcon   = makeIcon("#1d9e75");
-const privateIcon  = makeIcon("#ba7517");
+const selectedIcon = makeIcon("#D4537E");
+const publicIcon   = makeIcon("#1D9E75");
+const privateIcon  = makeIcon("#B45309");
 
 // ── Helper: pan map to selected hospital ──────────────────────────────────
 function MapPanner({ hospital }: { hospital: Hospital | null }) {
@@ -80,7 +83,7 @@ const OptimizedMarker = memo(({ hospital: h, isSelected, onSelect }: OptimizedMa
         <br />
         {h.address}
         <br />
-        <span style={{ color: h.type === "public" ? "#1d9e75" : "#ba7517" }}>
+        <span style={{ color: h.type === "public" ? "#1D9E75" : "#B45309" }}>
           {h.type}
         </span>
         {" "} · {h.distance_km} km
@@ -95,32 +98,20 @@ OptimizedMarker.displayName = 'OptimizedMarker';
 export default function SelectHospital() {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
+  const { t } = useTranslation();
 
   const [search, setSearch]       = useState("");
   const [filter, setFilter]       = useState<"all" | "public" | "private">("all");
   const [selected, setSelected]   = useState<Hospital | null>(null);
-  // Use a read-only hospitals array for now (mocked). When fetching from API,
-  // replace this with setHospitals and useEffect to update it.
   const hospitals: Hospital[] = MOCK_HOSPITALS;
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState("");
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
 
-  // Memoize callbacks to prevent unnecessary re-renders
   const handleSelectHospital = useCallback((h: Hospital) => {
     setSelected(h);
   }, []);
 
-  // ── Fetch from Django API (uncomment when backend is ready) ──────────────
-  // useEffect(() => {
-  //   navigator.geolocation.getCurrentPosition(async (pos) => {
-  //     const { latitude: lat, longitude: lng } = pos.coords;
-  //     const res = await api.get(`/hospitals/?lat=${lat}&lng=${lng}`);
-  //     setHospitals(res.data);
-  //   });
-  // }, []);
-
-  // ── Filter + search ───────────────────────────────────────────────────────
   const visible = useMemo(() => {
     return [...hospitals]
         .sort((a, b) => a.distance_km - b.distance_km)
@@ -132,222 +123,185 @@ export default function SelectHospital() {
         );
   }, [hospitals, filter, search]);
 
-  // ── ✅ FIX: Use api client + call refreshUser after save ─────────────────
   const handleContinue = async () => {
     if (!selected) return;
     setLoading(true);
     setError("");
     try {
-      // ✅ Send hospital ID to backend — it uses 'hospital' field
       await api.patch("/patients/profile/", { hospital: selected.id });
-      // ✅ Refresh user data to sync is_onboarded status
       await refreshUser();
-      // ✅ Navigate only after state refresh succeeds
       navigate("/home");
     } catch (err) {
-      // Keep user on this screen if save fails so they can retry
       console.error("Hospital save failed:", err);
-      setError("Could not save your hospital selection. Please try again.");
+      setError(t("hospital_save_failed"));
     } finally {
       setLoading(false);
     }
   };
 
   const handleSkip = async () => {
-    setLoading(true)
-    setError("")
+    setLoading(true);
+    setError("");
     try {
-      // Call skip onboarding endpoint
-      await api.post('/patients/skip-onboarding/')
-      await refreshUser()
-      navigate('/home')
+      await api.post('/patients/skip-onboarding/');
+      await refreshUser();
+      navigate('/home');
     } catch (err) {
-      console.error('Skip onboarding failed:', err)
-      setError('Could not skip onboarding. Please try again.')
+      console.error('Skip onboarding failed:', err);
+      setError(t('skip_failed'));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-      <div style={styles.page}>
-        {/* ── Header ── */}
-        <div style={styles.header}>
-          <button style={styles.iconBtn} onClick={() => navigate(-1)}>
-            <ArrowLeft size={18} color="rgba(255,255,255,0.8)" />
+      <div className="sh-page">
+        <div className="sh-header">
+          <button className="back-btn" onClick={() => navigate(-1)} aria-label={t('back')}>
+            <ArrowLeft size={18} />
           </button>
-          <div style={styles.progressTrack}>
-            <div style={styles.progressFill} />
+          <div className="sh-progress-track">
+            <div className="sh-progress-fill" />
           </div>
-          <div style={{ ...styles.iconBtn, background: "#3d2d5e" }}>
-            <MapPin size={18} color="#e05c7a" />
+          <div className="sh-header-icon" aria-hidden="true">
+            <MapPin size={18} />
           </div>
         </div>
 
-        {/* ── Title ── */}
-        <div style={styles.titleBlock}>
-          <h1 style={styles.title}>Select hospital</h1>
-          <p style={styles.subtitle}>Find your ANC facility</p>
+        <div className="sh-title-block">
+          <h1 className="sh-title">{t('select_hospital_title')}</h1>
+          <p className="sh-subtitle">{t('select_hospital_sub')}</p>
         </div>
 
-         {/* ── Map ── */}
-         <div style={styles.mapWrap}>
-           <MapContainer
-               center={[-6.7924, 39.2083]}
-               zoom={12}
-               style={{ width: "100%", height: "100%" }}
-               zoomControl={false}
-           >
-             <TileLayer
-                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                 attribution="© OpenStreetMap contributors"
-             />
-             <MapPanner hospital={selected} />
-             {visible.map((h) => (
-               <OptimizedMarker
-                 key={h.id}
-                 hospital={h}
-                 isSelected={selected?.id === h.id}
-                 onSelect={handleSelectHospital}
-               />
-             ))}
-           </MapContainer>
-         </div>
+        <div className="sh-map-wrap">
+          <MapContainer
+              center={[-6.7924, 39.2083]}
+              zoom={12}
+              style={{ width: "100%", height: "100%" }}
+              zoomControl={false}
+          >
+            <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution="© OpenStreetMap contributors"
+            />
+            <MapPanner hospital={selected} />
+            {visible.map((h) => (
+              <OptimizedMarker
+                key={h.id}
+                hospital={h}
+                isSelected={selected?.id === h.id}
+                onSelect={handleSelectHospital}
+              />
+            ))}
+          </MapContainer>
+        </div>
 
-        {/* ── Search + filters ── */}
-        <div style={styles.body}>
-          <div style={styles.searchBox}>
-            <Search size={16} color="rgba(255,255,255,0.4)" />
+        <div className="sh-body">
+          <div className="sh-search">
+            <Search size={16} className="sh-search-icon" />
             <input
-                style={styles.searchInput}
-                placeholder="Search facility or area..."
+                className="sh-search-input"
+                placeholder={t('search_facility_placeholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
             />
           </div>
 
-          <div style={styles.filterRow}>
+          <div className="sh-filter-row">
             {(["all", "public", "private"] as const).map((f) => (
                 <button
                     key={f}
-                    style={{
-                      ...styles.chip,
-                      ...(filter === f ? styles.chipActive : {}),
-                    }}
+                    className={`sh-chip${filter === f ? " sh-chip-active" : ""}`}
                     onClick={() => setFilter(f)}
                 >
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                  {t(`hospital_filter_${f}`)}
                 </button>
             ))}
           </div>
 
-          {/* ── Hospital list ── */}
-          <p style={styles.sectionLabel}>NEAREST TO YOU</p>
-          <div style={styles.list}>
+          <p className="sh-section-label">{t('nearest_to_you')}</p>
+          <div className="sh-list">
             {visible.length === 0 ? (
-                <p style={styles.empty}>No facilities found</p>
+                <p className="sh-empty">{t('no_facilities_found')}</p>
             ) : (
                  visible.map((h) => {
                    const isSel = selected?.id === h.id;
                    return (
-                       <div
+                       <button
                            key={h.id}
-                           style={{ ...styles.card, ...(isSel ? styles.cardSel : {}) }}
+                           type="button"
+                           className={`sh-card${isSel ? " sh-card-sel" : ""}`}
                            onClick={() => handleSelectHospital(h)}
                        >
-                        <div style={styles.cardIcon}>
-                          <Building2 size={20} color="#e05c7a" />
+                        <div className="sh-card-icon">
+                          <Building2 size={20} />
                         </div>
-                        <div style={styles.cardInfo}>
-                          <p style={styles.cardName}>{h.name}</p>
-                          <p style={styles.cardAddr}>{h.address}</p>
-                          <div style={styles.cardMeta}>
-                      <span
-                          style={{
-                            ...styles.badge,
-                            ...(h.type === "public" ? styles.badgePub : styles.badgePriv),
-                          }}
-                      >
-                        {h.type}
-                      </span>
-                            <span style={styles.dist}>
-                        <MapPin size={10} /> {h.distance_km} km away
-                      </span>
+                        <div className="sh-card-info">
+                          <p className="sh-card-name">{h.name}</p>
+                          <p className="sh-card-addr">{h.address}</p>
+                          <div className="sh-card-meta">
+                            <span className={`sh-badge sh-badge-${h.type}`}>{h.type}</span>
+                            <span className="sh-dist">
+                              <MapPin size={10} /> {h.distance_km} km {t('away')}
+                            </span>
                           </div>
                         </div>
-                        <div style={{ ...styles.checkCircle, ...(isSel ? styles.checkOn : {}) }}>
-                          {isSel && <Check size={12} color="white" />}
+                        <div className={`sh-check${isSel ? " sh-check-on" : ""}`}>
+                          {isSel && <Check size={12} />}
                         </div>
-                      </div>
+                      </button>
                   );
                 })
             )}
           </div>
 
-          {/* ── Error ── */}
-          {error && <p style={styles.errorMsg}>{error}</p>}
+          {error && <p className="sh-error">{error}</p>}
 
-          {/* ── Selected hospital summary ── */}
           {selected && (
-              <div style={styles.selectedSummary}>
-                <Building2 size={14} color="#e05c7a" />
-                <span style={styles.selectedText}>
-              Selected: <strong>{selected.name}</strong>
-            </span>
+              <div className="sh-selected-summary">
+                <Building2 size={14} />
+                <span>
+                  {t('selected_label')}: <strong>{selected.name}</strong>
+                </span>
               </div>
           )}
 
-          {/* ── Continue button ── */}
           <button
-              style={{
-                ...styles.continueBtn,
-                opacity: selected ? 1 : 0.4,
-                cursor: selected ? "pointer" : "not-allowed",
-              }}
+              className="btn-primary"
+              style={{ marginTop: 16 }}
               disabled={!selected || loading}
               onClick={handleContinue}
           >
-            {loading ? "Saving..." : selected ? "Continue →" : "Select a facility"}
+            {loading ? t('saving_ellipsis') : selected ? t('continue') : t('select_a_facility')}
           </button>
-          {/* Skip onboarding button */}
           <button
-              style={{
-                ...styles.continueBtn,
-                marginTop: 8,
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.12)',
-                color: '#fff',
-                opacity: 1,
-              }}
+              className="btn-ghost"
               onClick={() => setShowSkipConfirm(true)}
               disabled={loading}
           >
-            Skip for now
+            {t('skip_for_now')}
           </button>
         </div>
 
         {showSkipConfirm && (
-          <div style={styles.modalOverlay} role="dialog" aria-modal="true" aria-labelledby="skip-title">
-            <div style={styles.modalCard}>
-              <h3 id="skip-title" style={styles.modalTitle}>Skip hospital selection?</h3>
-              <p style={styles.modalText}>
-                You can continue without selecting a hospital now, and complete it later from your profile.
-              </p>
-              <div style={styles.modalActions}>
+          <div className="sh-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="skip-title">
+            <div className="sh-modal-card">
+              <h3 id="skip-title" className="sh-modal-title">{t('skip_hospital_q')}</h3>
+              <p className="sh-modal-text">{t('skip_hospital_body')}</p>
+              <div className="sh-modal-actions">
                 <button
-                  style={styles.modalSecondaryBtn}
+                  className="sh-modal-secondary"
                   onClick={() => setShowSkipConfirm(false)}
                   disabled={loading}
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
-                  style={styles.modalPrimaryBtn}
+                  className="sh-modal-primary"
                   onClick={handleSkip}
                   disabled={loading}
                 >
-                  {loading ? 'Skipping...' : 'Yes, skip'}
+                  {loading ? t('skipping_ellipsis') : t('yes_skip')}
                 </button>
               </div>
             </div>
@@ -356,49 +310,3 @@ export default function SelectHospital() {
       </div>
   );
 }
-
-// ── Styles ─────────────────────────────────────────────────────────────────
-const styles: Record<string, React.CSSProperties> = {
-  page:            { background: "#1a1a2e", minHeight: "100vh", display: "flex", flexDirection: "column", fontFamily: "sans-serif" },
-  header:          { display: "flex", alignItems: "center", gap: 10, padding: "16px 20px 0" },
-  iconBtn:         { width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.1)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
-  progressTrack:   { flex: 1, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2 },
-  progressFill:    { width: "100%", height: "100%", background: "#e05c7a", borderRadius: 2 },
-  titleBlock:      { padding: "16px 20px 8px" },
-  title:           { fontSize: 22, fontWeight: 600, color: "#fff", margin: 0 },
-  subtitle:        { fontSize: 13, color: "rgba(255,255,255,0.5)", margin: "4px 0 0" },
-  mapWrap:         { width: "100%", height: 220, flexShrink: 0 },
-  body:            { flex: 1, padding: "16px 20px 24px", overflowY: "auto" },
-  searchBox:       { display: "flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,0.08)", border: "0.5px solid rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 14px", marginBottom: 12 },
-  searchInput:     { background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, flex: 1 },
-  filterRow:       { display: "flex", gap: 8, marginBottom: 16 },
-  chip:            { padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 500, cursor: "pointer", border: "1.5px solid rgba(255,255,255,0.2)", background: "transparent", color: "rgba(255,255,255,0.6)" },
-  chipActive:      { borderColor: "#e05c7a", color: "#e05c7a", background: "rgba(224,92,122,0.15)" },
-  sectionLabel:    { fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.4)", marginBottom: 10, letterSpacing: 0.5 },
-  list:            { display: "flex", flexDirection: "column", gap: 10 },
-  card:            { background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: 14, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" },
-  cardSel:         { borderColor: "#e05c7a", background: "rgba(224,92,122,0.12)" },
-  cardIcon:        { width: 40, height: 40, borderRadius: 10, background: "rgba(224,92,122,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  cardInfo:        { flex: 1, minWidth: 0 },
-  cardName:        { fontSize: 14, fontWeight: 500, color: "#fff", margin: "0 0 3px" },
-  cardAddr:        { fontSize: 12, color: "rgba(255,255,255,0.45)", margin: "0 0 6px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  cardMeta:        { display: "flex", alignItems: "center", gap: 8 },
-  badge:           { fontSize: 10, fontWeight: 500, padding: "2px 8px", borderRadius: 10 },
-  badgePub:        { background: "rgba(29,158,117,0.25)", color: "#5dcaa5" },
-  badgePriv:       { background: "rgba(186,117,23,0.25)", color: "#fac775" },
-  dist:            { fontSize: 11, color: "rgba(255,255,255,0.4)", display: "flex", alignItems: "center", gap: 3 },
-  checkCircle:     { width: 22, height: 22, borderRadius: "50%", border: "1.5px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  checkOn:         { background: "#e05c7a", borderColor: "#e05c7a" },
-  selectedSummary: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "rgba(224,92,122,0.1)", borderRadius: 10, marginTop: 12, border: "0.5px solid rgba(224,92,122,0.3)" },
-  selectedText:    { fontSize: 13, color: "rgba(255,255,255,0.7)" },
-  continueBtn:     { width: "100%", padding: 16, background: "linear-gradient(135deg, #e05c7a, #c94b6a)", color: "#fff", border: "none", borderRadius: 16, fontSize: 16, fontWeight: 500, marginTop: 16, transition: "opacity 0.2s" },
-  errorMsg:        { color: "#f09595", fontSize: 13, textAlign: "center", marginTop: 8 },
-  empty:           { textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 13, padding: "24px 0" },
-  modalOverlay:    { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 },
-  modalCard:       { width: "100%", maxWidth: 360, background: "#fff", borderRadius: 20, padding: 20, boxShadow: "0 20px 50px rgba(0,0,0,0.25)" },
-  modalTitle:      { fontSize: 18, fontWeight: 700, margin: 0, color: "#1f1f2e" },
-  modalText:       { fontSize: 14, lineHeight: 1.5, color: "#555", margin: "10px 0 18px" },
-  modalActions:    { display: "flex", gap: 10, justifyContent: "flex-end" },
-  modalSecondaryBtn: { padding: "10px 16px", borderRadius: 12, border: "1px solid #ddd", background: "#fff", color: "#333", fontWeight: 600 },
-  modalPrimaryBtn: { padding: "10px 16px", borderRadius: 12, border: "none", background: "#e05c7a", color: "#fff", fontWeight: 700 },
-};

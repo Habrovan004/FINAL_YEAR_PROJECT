@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Search, Map as MapIcon, List, Loader2, CheckCircle2, Moon, Sun, MapPin, Calendar, Plus, Minus, Info, AlertCircle, HeartPulse, Bell, Volume2, Type } from 'lucide-react'
+import { ArrowLeft, Search, Map as MapIcon, List, Loader2, CheckCircle2, MapPin, Calendar, Plus, Minus, Info, AlertCircle, HeartPulse, Bell, Volume2, Type, Phone, Mail } from 'lucide-react'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import api from '../../api/client'
-import { useTheme } from '../../context/ThemeContext'
 import { useTranslation } from 'react-i18next'
 import './OnboardingFlow.css'
 import './auth.css'
@@ -42,6 +41,7 @@ interface FormData {
   weight_kg: string; height_cm: string; initial_symptoms: SymptomEntry[]
   hospital: string; language: string
   notifications_enabled: boolean; audio_guidance: boolean; font_size: 'small' | 'medium' | 'large'
+  verification_method: 'sms' | 'email'
 }
 
 type FormDataValue = string | number | boolean | string[] | SymptomEntry[];
@@ -69,7 +69,6 @@ interface AxiosError {
 
 export default function OnboardingFlow() {
   const nav = useNavigate()
-  const { dark, toggle } = useTheme()
   const { i18n, t } = useTranslation()
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<FormData>({
@@ -79,7 +78,8 @@ export default function OnboardingFlow() {
     is_first_pregnancy: true, previous_pregnancies: 0, previous_complications: [],
     weight_kg: '', height_cm: '', initial_symptoms: [],
     hospital: '', language: i18n.language,
-    notifications_enabled: true, audio_guidance: false, font_size: 'medium'
+    notifications_enabled: true, audio_guidance: false, font_size: 'medium',
+    verification_method: 'sms'
   })
 
   const [loading, setLoading] = useState(false)
@@ -131,11 +131,6 @@ export default function OnboardingFlow() {
   }, [step, fetchHospitals])
 
   const update = (key: keyof FormData, val: FormDataValue) => setForm(p => ({ ...p, [key]: val }))
-  
-  const setLanguage = (lang: string) => {
-    i18n.changeLanguage(lang)
-    update('language', lang)
-  }
 
   const toggleSymptom = (name: string) => {
     const existing = form.initial_symptoms.find(s => s.name === name)
@@ -181,6 +176,7 @@ export default function OnboardingFlow() {
         date_of_birth: form.date_of_birth || null,
         password: form.password,
         user_type: form.user_type,
+        verification_channel: form.verification_method,
       }
       if (form.user_type !== 'patient') {
         payload.hospital_id = form.hospital ? parseInt(form.hospital) : null
@@ -192,11 +188,17 @@ export default function OnboardingFlow() {
 
       localStorage.setItem('pending_phone', form.phone_number)
       if (form.user_type === 'patient') {
-        localStorage.setItem('onboarding_data', JSON.stringify(form))
+        localStorage.setItem('onboarding_data', JSON.stringify({ ...form, language: i18n.language }))
       } else {
         localStorage.removeItem('onboarding_data')
       }
-      nav('/onboarding/verify', { state: { phoneNumber: form.phone_number, devOtp: regData.dev_otp } })
+      nav('/onboarding/verify', {
+        state: {
+          phoneNumber: form.phone_number,
+          channel: regData.channel || form.verification_method,
+          email: form.email || null,
+        },
+      })
     } catch (err) {
       const axiosErr = err as AxiosError
       const data = axiosErr.response?.data
@@ -258,8 +260,16 @@ export default function OnboardingFlow() {
       return
     }
 
+    if (step === TOTAL_STEPS) {
+      if (form.verification_method === 'email' && !form.email.trim()) {
+        alert(t('email_required_for_verification'))
+        return
+      }
+      void handleFinish()
+      return
+    }
+
     if (step < TOTAL_STEPS) setStep(s => s + 1)
-    else void handleFinish()
   }
 
   const back = () => {
@@ -309,13 +319,6 @@ export default function OnboardingFlow() {
               <span>{TOTAL_STEPS}</span>
             </div>
             <div className="ob-progress-track"><div className="ob-progress-fill" style={{ width: `${progress}%` }} /></div>
-          </div>
-          <div className="header-controls">
-            <div className="ob-lang-switch">
-               <button onClick={() => setLanguage('en')} className={`px-2 py-1 text-[9px] font-black rounded-md transition-all ${i18n.language === 'en' ? 'bg-white text-rose-500 shadow-sm' : 'text-gray-400'}`}>EN</button>
-               <button onClick={() => setLanguage('sw')} className={`px-2 py-1 text-[9px] font-black rounded-md transition-all ${i18n.language === 'sw' ? 'bg-white text-rose-500 shadow-sm' : 'text-gray-400'}`}>SW</button>
-            </div>
-            <button onClick={toggle} className="theme-icon-btn">{dark ? <Sun size={14} /> : <Moon size={14} />}</button>
           </div>
         </header>
 
@@ -481,14 +484,78 @@ export default function OnboardingFlow() {
           )}
 
           {step === 8 && (
-            <div className="ob-success">
-              <div className="ob-success-bubble"><CheckCircle2 size={40} /></div>
-              <h2 className="ob-success-title">{t('ready_to_verify')}</h2>
-              <p className="ob-success-sub">{t('verify_to_finish')}</p>
-            </div>
+            <>
+              <div className="ob-titles">
+                <span className="ob-eyebrow">{t('verification')}</span>
+                <h2 className="ob-title">{t('choose_verification_method')}</h2>
+                <p className="ob-subtitle">{t('choose_verification_sub')}</p>
+              </div>
+              <div className="ob-options" role="radiogroup" aria-label={t('choose_verification_method')}>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={form.verification_method === 'sms'}
+                  onClick={() => update('verification_method', 'sms')}
+                  className={`ob-option ob-method ${form.verification_method === 'sms' ? 'active' : ''}`}
+                >
+                  <div className="ob-method-icon"><Phone size={20} /></div>
+                  <div className="ob-method-body">
+                    <p className="ob-option-title">{t('verify_via_sms')}</p>
+                    <p className="ob-option-sub">
+                      {t('verify_via_sms_sub')}
+                      {form.phone_number ? <> · <strong>{form.phone_number}</strong></> : null}
+                    </p>
+                  </div>
+                  <div className={`ob-method-check ${form.verification_method === 'sms' ? 'on' : ''}`}>
+                    {form.verification_method === 'sms' && <CheckCircle2 size={18} />}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={form.verification_method === 'email'}
+                  onClick={() => update('verification_method', 'email')}
+                  className={`ob-option ob-method ${form.verification_method === 'email' ? 'active' : ''}`}
+                >
+                  <div className="ob-method-icon"><Mail size={20} /></div>
+                  <div className="ob-method-body">
+                    <p className="ob-option-title">{t('verify_via_email')}</p>
+                    <p className="ob-option-sub">
+                      {t('verify_via_email_sub')}
+                      {form.email ? <> · <strong>{form.email}</strong></> : null}
+                    </p>
+                  </div>
+                  <div className={`ob-method-check ${form.verification_method === 'email' ? 'on' : ''}`}>
+                    {form.verification_method === 'email' && <CheckCircle2 size={18} />}
+                  </div>
+                </button>
+
+                {form.verification_method === 'email' && !form.email.trim() && (
+                  <div className="ob-method-warning" role="alert">
+                    <AlertCircle size={14} />
+                    <span>{t('email_required_for_verification')}</span>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
-          <div className="ob-cta"><button className="btn-primary" onClick={next} disabled={loading || !isWeightValid || !isHeightValid || (step === 6 && !form.hospital)}>{loading ? <Loader2 className="ob-spin" size={18} /> : step === TOTAL_STEPS ? t('continue') : t('continue')}</button></div>
+          <div className="ob-cta">
+            <button
+              className="btn-primary"
+              onClick={next}
+              disabled={
+                loading ||
+                !isWeightValid ||
+                !isHeightValid ||
+                (step === 6 && !form.hospital) ||
+                (step === TOTAL_STEPS && form.verification_method === 'email' && !form.email.trim())
+              }
+            >
+              {loading ? <Loader2 className="ob-spin" size={18} /> : t('continue')}
+            </button>
+          </div>
         </main>
       </div>
   )

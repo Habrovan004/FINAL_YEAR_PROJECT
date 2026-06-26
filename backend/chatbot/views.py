@@ -1,32 +1,37 @@
 """
-Module 5 — Chat endpoints
+Health Assistant chat endpoints.
 
 Workflow:
-  1. Mother opens chat → GET /api/chatbot/conversation/  (creates one if none)
+  1. Mother opens chat → GET /api/chatbot/conversation/
   2. Mother sends message → POST /api/chatbot/message/
-     - Backend runs escalation detector first.
-     - If escalation: type flips to 'provider', a notification fires, the
-       provider sees the conversation in their queue.
-     - Otherwise: Q&A engine answers as 'chatbot'.
+     - AI engine generates a reply with full conversation context.
+     - If the AI flags a real medical emergency (escalate=true), the
+       conversation flips to `provider` and the assigned provider sees it
+       in their queue.
   3. Provider views queue → GET /api/chatbot/provider/queue/
   4. Either party fetches history → GET /api/chatbot/conversation/<id>/messages/
+
+There are NO keyword-based or canned responses in the production path. When
+the AI service is unavailable, the engine returns a clearly-marked
+"service unavailable" message instead of fake answers.
 """
+import logging
+
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from accounts.models import User
 from .models import Conversation, Message
-from .chatbot_engine import process_message
+from .ai_engine import process_message
+
+logger = logging.getLogger(__name__)
 
 
 def _serialize_message(m: Message) -> dict:
     sender_name = "Health Assistant"
-    if m.sender_type == 'mother' and m.sender:
-        sender_name = m.sender.full_name
-    elif m.sender_type == 'provider' and m.sender:
+    if m.sender_type in ('mother', 'provider') and m.sender:
         sender_name = m.sender.full_name
     return {
         'id': m.id,
@@ -56,12 +61,35 @@ def _serialize_conversation(c: Conversation, include_messages: bool = False) -> 
     return data
 
 
+def _greeting(language: str) -> str:
+    if (language or '').lower().startswith('sw'):
+        return (
+            "Habari! Mimi ni Msaidizi wa Afya wa Mimba Yangu. "
+            "Niambie unavyojisikia au uniulize chochote kuhusu lishe, "
+            "ujauzito, kujifungua, au malezi ya mtoto mchanga. "
+            "Naelewa Kiswahili na Kiingereza."
+        )
+    return (
+        "Hi! I'm your Mimba Yangu Health Assistant. "
+        "Tell me how you're feeling, or ask me anything about nutrition, "
+        "pregnancy, labour, or newborn care. "
+        "I understand both English and Swahili — just write in whichever you prefer."
+    )
+
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def conversation_entry(request):
     """Mother's entry point: get-or-create the active conversation."""
     if request.user.user_type != 'patient':
         return Response({'error': 'Only mothers start conversations here.'}, status=403)
+
+    language = (
+        request.query_params.get('language')
+        or request.data.get('language')
+        or getattr(getattr(request.user, 'profile', None), 'language', 'en')
+        or 'en'
+    )
 
     convo = (
         Conversation.objects
@@ -80,16 +108,11 @@ def conversation_entry(request):
             provider=provider,
             type='chatbot',
         )
-        # Greet the mother
         Message.objects.create(
             conversation=convo,
             sender=None,
             sender_type='chatbot',
-            content=(
-                "Hello! I'm your Mimba Yangu Health Assistant. "
-                "Ask me anything about nutrition, danger signs, ANC visits or labour. "
-                "If you need a real provider, just say 'I need a doctor'."
-            ),
+            content=_greeting(language),
         )
 
     return Response(_serialize_conversation(convo, include_messages=True))
@@ -98,7 +121,7 @@ def conversation_entry(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def post_message(request):
-    """Mother posts a message. Engine decides chatbot reply vs. escalation."""
+    """Mother posts a message. AI generates the reply; high-risk cases escalate."""
     convo_id = request.data.get('conversation_id')
     text = (request.data.get('content') or '').strip()
     language = request.data.get('language', 'en')
@@ -113,6 +136,15 @@ def post_message(request):
     except Conversation.DoesNotExist:
         return Response({'error': 'Conversation not found.'}, status=404)
 
+    logger.debug(
+        "Mother message | user=%s convo=%s lang_hint=%s text=%r",
+        request.user.id, convo.id, language, text[:160],
+    )
+
+    # Snapshot history BEFORE we add the new message so the AI sees only what
+    # came before.
+    history_qs = list(convo.messages_v2.all())
+
     # Save the mother's message
     mother_msg = Message.objects.create(
         conversation=convo,
@@ -123,17 +155,18 @@ def post_message(request):
 
     # If already escalated to provider, do NOT run the bot — just deliver.
     if convo.type == 'provider':
+        convo.save(update_fields=['updated_at'])
         return Response({
             'message': _serialize_message(mother_msg),
             'conversation_type': convo.type,
             'bot_reply': None,
         }, status=201)
 
-    # Run the chatbot pipeline
-    result = process_message(text, language=language)
+    # Run the AI engine with full context
+    result = process_message(text, history=history_qs, language_hint=language)
+    ai_available = result.get('ai_available', True)
 
     if result['escalate']:
-        # Bot still posts the holding reply, then we flip the conversation.
         bot_reply = Message.objects.create(
             conversation=convo,
             sender=None,
@@ -141,15 +174,18 @@ def post_message(request):
             content=result['bot_reply'],
             triggered_escalation=True,
         )
-        # Switch type and notify provider
         convo.type = 'provider'
         convo.escalated_at = timezone.now()
-        # Make sure a provider is attached
         if not convo.provider:
             profile = getattr(request.user, 'profile', None)
             if profile and profile.assigned_provider:
                 convo.provider = profile.assigned_provider.user
         convo.save(update_fields=['type', 'escalated_at', 'provider', 'updated_at'])
+
+        logger.info(
+            "Escalation | convo=%s mother=%s reason=%s",
+            convo.id, request.user.id, result.get('reason'),
+        )
 
         return Response({
             'message': _serialize_message(mother_msg),
@@ -157,9 +193,9 @@ def post_message(request):
             'conversation_type': convo.type,
             'escalated': True,
             'escalation_reason': result['reason'],
+            'ai_available': ai_available,
         }, status=201)
 
-    # Plain chatbot reply
     bot_reply = Message.objects.create(
         conversation=convo,
         sender=None,
@@ -173,6 +209,7 @@ def post_message(request):
         'bot_reply': _serialize_message(bot_reply),
         'conversation_type': convo.type,
         'escalated': False,
+        'ai_available': ai_available,
     }, status=201)
 
 
@@ -245,8 +282,9 @@ def provider_reply(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def bot_chat(request):
-    """Legacy proxy: forwards to the new conversation flow."""
+    """Legacy proxy that now goes through the AI engine."""
     text = (request.data.get('text') or '').strip()
+    language = request.data.get('language', 'en')
     if not text:
         return Response({'error': 'No text provided'}, status=400)
 
@@ -263,8 +301,9 @@ def bot_chat(request):
             provider = profile.assigned_provider.user
         convo = Conversation.objects.create(mother=request.user, provider=provider, type='chatbot')
 
+    history_qs = list(convo.messages_v2.all())
     Message.objects.create(conversation=convo, sender=request.user, sender_type='mother', content=text)
-    result = process_message(text)
+    result = process_message(text, history=history_qs, language_hint=language)
     if result['escalate']:
         convo.type = 'provider'
         convo.escalated_at = timezone.now()
@@ -293,7 +332,7 @@ def chat_history(request):
     if not convo:
         return Response([])
     return Response([{
-        'sender': 'bot' if m.sender_type in ('chatbot',) else ('patient' if m.sender_type == 'mother' else 'provider'),
+        'sender': 'bot' if m.sender_type == 'chatbot' else ('patient' if m.sender_type == 'mother' else 'provider'),
         'text': m.content,
         'time': m.created_at,
     } for m in convo.messages_v2.all()])

@@ -1,0 +1,361 @@
+/* SelectHospital — theme-aware (relies on tokens from auth.css). */
+
+.sh-page {
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.sh-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px 0;
+}
+
+.sh-header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--bg-pink);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sh-progress-track {
+  flex: 1;
+  height: 6px;
+  background: color-mix(in srgb, var(--border) 70%, var(--bg-card));
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.sh-progress-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #f59e9e);
+  border-radius: inherit;
+}
+
+.sh-title-block {
+  padding: 16px 20px 8px;
+}
+
+.sh-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.sh-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+.sh-map-wrap {
+  width: 100%;
+  height: 220px;
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.sh-body {
+  flex: 1;
+  padding: 16px 20px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sh-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s ease, background 0.25s ease;
+}
+
+.sh-search:focus-within {
+  border-color: var(--accent);
+}
+
+.sh-search-icon {
+  color: var(--text-tertiary);
+}
+
+.sh-search-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  flex: 1;
+  font-family: inherit;
+}
+
+.sh-search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.sh-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.sh-chip {
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  transition: border-color 0.18s ease, color 0.18s ease, background 0.18s ease;
+  font-family: inherit;
+}
+
+.sh-chip-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg-card));
+}
+
+.sh-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+
+.sh-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sh-card {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.sh-card:hover {
+  transform: translateY(-1px);
+}
+
+.sh-card-sel {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-card));
+}
+
+.sh-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-pink);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sh-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sh-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 3px;
+}
+
+.sh-card-addr {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sh-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sh-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: capitalize;
+}
+
+.sh-badge-public {
+  background: color-mix(in srgb, var(--green) 18%, var(--bg-card));
+  color: var(--green);
+}
+
+.sh-badge-private {
+  background: color-mix(in srgb, #b45309 18%, var(--bg-card));
+  color: #b45309;
+}
+
+[data-theme='dark'] .sh-badge-private {
+  color: #fac775;
+}
+
+.sh-dist {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.sh-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: transparent;
+}
+
+.sh-check-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.sh-selected-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-card));
+  border-radius: 10px;
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.sh-error {
+  color: var(--error);
+  font-size: 13px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.sh-empty {
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  padding: 24px 0;
+}
+
+.sh-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.sh-modal-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.sh-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.sh-modal-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 10px 0 18px;
+}
+
+.sh-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.sh-modal-secondary,
+.sh-modal-primary {
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+}
+
+.sh-modal-secondary {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.sh-modal-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.sh-modal-secondary:disabled,
+.sh-modal-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

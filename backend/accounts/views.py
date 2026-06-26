@@ -1,7 +1,6 @@
 import uuid
 import datetime
 
-from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -91,14 +90,10 @@ def send_otp(request):
         print(f"VERIFICATION CODE FOR {user.phone_number}: {otp.code}  (via {used_channel})")
         print(f"******************************************\n")
 
-        response_data = {
+        return Response({
             'message': f'OTP code sent via {used_channel}.',
             'channel': used_channel,
-        }
-        if settings.DEBUG:
-            response_data['dev_otp'] = otp.code
-
-        return Response(response_data, status=status.HTTP_200_OK)
+        }, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
@@ -127,13 +122,14 @@ def request_password_reset(request):
         otp = OTPCode.generate_for_user(user)
         used_channel = _deliver_otp(user, otp.code, channel, purpose='password_reset')
 
-        response_data = {
+        print(f"\n******************************************")
+        print(f"PASSWORD RESET CODE FOR {user.phone_number}: {otp.code}  (via {used_channel})")
+        print(f"******************************************\n")
+
+        return Response({
             'message': f'Password reset code sent via {used_channel}.',
             'channel': used_channel,
-        }
-        if settings.DEBUG:
-            response_data['dev_otp'] = otp.code
-        return Response(response_data, status=status.HTTP_200_OK)
+        }, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -177,20 +173,15 @@ def register(request):
         channel = (request.data.get('verification_channel') or 'sms').lower()
         used_channel = _deliver_otp(user, otp.code, channel)
 
-        response_data = {
-            'message': f'Account created. Verification code sent via {used_channel}.',
-            'user': UserSerializer(user).data,
-            'channel': used_channel,
-        }
-
         print(f"\n******************************************")
         print(f"VERIFICATION CODE FOR {user.phone_number}: {otp.code}  (via {used_channel})")
         print(f"******************************************\n")
 
-        if settings.DEBUG:
-            response_data['dev_otp'] = otp.code
-
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response({
+            'message': f'Account created. Verification code sent via {used_channel}.',
+            'user': UserSerializer(user).data,
+            'channel': used_channel,
+        }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Languages, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -68,19 +68,28 @@ function OnboardingRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+const ONBOARDING_PATH_PREFIXES = ['/onboarding', '/login', '/password-reset']
+
 function GlobalControls() {
   const { dark, toggle } = useTheme()
   const { i18n } = useTranslation()
+  const location = useLocation()
   const activeLanguage = i18n.language?.startsWith('sw') ? 'sw' : 'en'
+
+  const isOnboarding =
+    location.pathname === '/' ||
+    ONBOARDING_PATH_PREFIXES.some(prefix => location.pathname.startsWith(prefix))
 
   const toggleLanguage = () => {
     const nextLanguage = activeLanguage === 'sw' ? 'en' : 'sw'
     void i18n.changeLanguage(nextLanguage)
-    localStorage.setItem('mama-language', nextLanguage)
   }
 
   return (
-    <div className="global-controls" aria-label="Display settings">
+    <div
+      className={`global-controls${isOnboarding ? ' global-controls--top' : ''}`}
+      aria-label="Display settings"
+    >
       <button
         type="button"
         className="global-control-btn"

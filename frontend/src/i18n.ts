@@ -74,6 +74,13 @@ const resources = {
       "sign_in": "Sign In",
       "forgot_password": "Forgot password?",
       "no_account_signup": "Don't have an account? Sign up",
+      "signing_in_as": "I'm signing in as",
+      "role_mama": "Mama",
+      "role_provider": "Provider",
+      "role_manager": "Manager",
+      "show_password": "Show password",
+      "hide_password": "Hide password",
+      "password_min_6": "Password must be at least 6 characters.",
       "reset_password": "Reset password",
       "reset_intro_sms": "Enter your phone number to receive a reset code via SMS.",
       "reset_intro_email": "Enter your phone number to receive a reset code via email.",
@@ -202,7 +209,32 @@ const resources = {
       "share_location": "Share location",
       "immediate_instructions": "Immediate instructions",
       "close_alert": "Close",
-      "sr_sos_dispatched": "Emergency alert dispatched. Calling emergency services now."
+      "sr_sos_dispatched": "Emergency alert dispatched. Calling emergency services now.",
+      "learn_title": "Learn",
+      "learn_subtitle": "Tips and guides for a healthy pregnancy",
+      "search_placeholder": "Search tips...",
+      "no_tips": "No tips yet. Check back soon!",
+      "browse": "Browse",
+      "saved": "Saved",
+      "save_tip": "Save",
+      "unsave_tip": "Remove",
+      "read_more": "Read More",
+      "minutes_read": "min read",
+      "written_by": "By",
+      "categories": {
+        "what_to_do": "What to Do",
+        "what_to_avoid": "What to Avoid",
+        "warning_signs": "Warning Signs",
+        "hormonal_changes": "Body Changes",
+        "birth_prep": "Birth Prep",
+        "nutrition": "Nutrition & Food"
+      },
+      "trimester": {
+        "all": "All",
+        "first": "1st Trimester",
+        "second": "2nd Trimester",
+        "third": "3rd Trimester"
+      }
     }
   },
   sw: {
@@ -276,6 +308,13 @@ const resources = {
       "sign_in": "Ingia",
       "forgot_password": "Umesahau nenosiri?",
       "no_account_signup": "Huna akaunti? Jisajili",
+      "signing_in_as": "Ninaingia kama",
+      "role_mama": "Mama",
+      "role_provider": "Mhudumu",
+      "role_manager": "Meneja",
+      "show_password": "Onyesha nenosiri",
+      "hide_password": "Ficha nenosiri",
+      "password_min_6": "Nenosiri lazima liwe na angalau herufi 6.",
       "reset_password": "Weka upya nenosiri",
       "reset_intro_sms": "Ingiza namba yako ya simu ili kupokea msimbo wa kuweka upya kupitia SMS.",
       "reset_intro_email": "Ingiza namba yako ya simu ili kupokea msimbo wa kuweka upya kupitia barua pepe.",
@@ -404,7 +443,32 @@ const resources = {
       "share_location": "Shiriki eneo",
       "immediate_instructions": "Maelekezo ya haraka",
       "close_alert": "Funga",
-      "sr_sos_dispatched": "Tahadhari ya dharura imetumwa. Inapiga simu huduma za dharura sasa."
+      "sr_sos_dispatched": "Tahadhari ya dharura imetumwa. Inapiga simu huduma za dharura sasa.",
+      "learn_title": "Jifunze",
+      "learn_subtitle": "Vidokezo na miongozo ya ujauzito wenye afya",
+      "search_placeholder": "Tafuta vidokezo...",
+      "no_tips": "Hakuna vidokezo bado. Rudi tena hivi karibuni!",
+      "browse": "Tafuta",
+      "saved": "Zilizohifadhiwa",
+      "save_tip": "Hifadhi",
+      "unsave_tip": "Ondoa",
+      "read_more": "Soma Zaidi",
+      "minutes_read": "dakika kusoma",
+      "written_by": "Na",
+      "categories": {
+        "what_to_do": "Nini cha Kufanya",
+        "what_to_avoid": "Nini cha Kuepuka",
+        "warning_signs": "Dalili za Hatari",
+        "hormonal_changes": "Mabadiliko ya Mwili",
+        "birth_prep": "Maandalizi ya Kujifungua",
+        "nutrition": "Lishe na Chakula"
+      },
+      "trimester": {
+        "all": "Zote",
+        "first": "Trimesta ya 1",
+        "second": "Trimesta ya 2",
+        "third": "Trimesta ya 3"
+      }
     }
   }
 };

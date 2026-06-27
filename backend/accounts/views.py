@@ -1,6 +1,7 @@
 import uuid
 import datetime
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -17,6 +18,7 @@ from appointments.models import Appointment
 from tracking.models import SymptomReport
 from emergency.models import EmergencyLog
 from medication.models import MedicationReminder
+from clinical.models import ANCVisit
 from .sms import send_otp_sms
 from .email_otp import send_otp_email
 
@@ -277,13 +279,21 @@ def provider_dashboard(request):
         action='sos_trigger'
     ).order_by('-triggered_at')[:10]
 
+    # Recent high-risk ANC visits (last 30 days) for this provider's patients
+    cutoff = timezone.now() - datetime.timedelta(days=30)
+    anc_high_risk = ANCVisit.objects.filter(
+        patient__profile__assigned_provider=provider_profile,
+        risk_level='high',
+        visit_date__gte=cutoff,
+    ).order_by('-visit_date')[:20]
+
     all_past_appts = Appointment.objects.filter(
         provider=request.user,
         appointment_date__lt=today_date
     )
     total_past = all_past_appts.count()
     attended_count = all_past_appts.filter(status='attended').count()
-    attendance_rate = (attended_count / total_past * 100) if total_past > 0 else 100
+    attendance_rate = (attended_count / total_past * 100) if total_past > 0 else None
 
     all_reminders = MedicationReminder.objects.filter(
         prescription__patient__profile__assigned_provider=provider_profile
@@ -297,9 +307,11 @@ def provider_dashboard(request):
         'hospital': provider_profile.hospital.name,
         'stats': {
             'total_patients': patients.count(),
-            'attendance_rate': round(attendance_rate, 1),
+            'attendance_rate': round(attendance_rate, 1) if attendance_rate is not None else None,
+            'attendance_total': total_past,
+            'attendance_attended': attended_count,
             'adherence_rate': round(adherence_rate, 1),
-            'pending_alerts': symptom_alerts.count() + sos_alerts.count()
+            'pending_alerts': symptom_alerts.count() + sos_alerts.count() + anc_high_risk.count(),
         },
         'appointments': {
             'upcoming_count': upcoming_appts.count(),
@@ -311,19 +323,30 @@ def provider_dashboard(request):
                 'type': a.get_visit_type_display()
             } for a in upcoming_appts.filter(appointment_date=today_date)]
         },
-        'critical_alerts': list([{
-            'id': s.id,
-            'type': 'symptom',
-            'patient': s.patient.full_name,
-            'risk': s.risk_level,
-            'time': s.created_at
-        } for s in symptom_alerts]) + list([{
-            'id': e.id,
-            'type': 'sos',
-            'patient': e.user.full_name,
-            'location': f"{e.latitude}, {e.longitude}",
-            'time': e.triggered_at
-        } for e in sos_alerts])
+        'critical_alerts': (
+            [{
+                'id': s.id,
+                'type': 'symptom',
+                'patient': s.patient.full_name,
+                'risk': s.risk_level,
+                'time': s.created_at,
+            } for s in symptom_alerts]
+            + [{
+                'id': e.id,
+                'type': 'sos',
+                'patient': e.user.full_name,
+                'location': f"{e.latitude}, {e.longitude}",
+                'time': e.triggered_at,
+            } for e in sos_alerts]
+            + [{
+                'id': v.id,
+                'type': 'anc_visit',
+                'patient': v.patient.full_name,
+                'risk': v.risk_level,
+                'reasons': v.risk_reasons,
+                'time': v.visit_date,
+            } for v in anc_high_risk]
+        ),
     })
 
 

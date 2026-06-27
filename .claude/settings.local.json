@@ -10,7 +10,12 @@
       "Bash(pip show *)",
       "Bash(npx tsc *)",
       "Bash(echo \"tsc=$?\")",
-      "Bash(echo \"exit=$?\")"
+      "Bash(echo \"exit=$?\")",
+      "Bash(xargs grep -l \"registration\\\\|register.*patient\\\\|new.*patient\\\\|CreatePatient\\\\|patient.*create\")",
+      "Bash(xargs grep -l \"new.*patient\\\\|patient.*register\\\\|CreatePatient\\\\|registerPatient\\\\|addPatient\\\\|registerMotherPatient\")",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(grep -nA 6 \"^\\\\.manager-section\" /c/Users/PJ/FINAL_YEAR_PROJECT/frontend/src/pages/Manager/manager.css)",
+      "Bash(grep -nE \"t\\\\\\(|\\\\\\\\.t\\\\\\\\\\(|i18n|translate\" /c/Users/PJ/FINAL_YEAR_PROJECT/frontend/src/pages/Learn/LearnPage.tsx)"
     ]
   }
 }

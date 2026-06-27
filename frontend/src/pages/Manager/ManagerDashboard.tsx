@@ -183,27 +183,31 @@ function Overview({ stats }: { stats: Stats }) {
 
       <section className="manager-section">
         <h2>Risk distribution (last 30 days)</h2>
-        <ResponsiveContainer width="100%" height={180}>
-          <PieChart>
-            <Pie data={riskData} dataKey="value" nameKey="name" innerRadius={36} outerRadius={68} label>
-              {riskData.map((d, i) => <Cell key={i} fill={d.fill} />)}
-            </Pie>
-            <Tooltip />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
+        <div style={{ width: '100%', height: 180 }}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+            <PieChart>
+              <Pie data={riskData} dataKey="value" nameKey="name" innerRadius={36} outerRadius={68} label>
+                {riskData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       </section>
 
       <section className="manager-section">
         <h2>ANC visits — last 6 weeks</h2>
-        <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={visitData}>
-            <XAxis dataKey="week" fontSize={10} />
-            <YAxis fontSize={10} allowDecimals={false} />
-            <Tooltip />
-            <Line type="monotone" dataKey="visits" stroke="#f472b6" strokeWidth={2} dot />
-          </LineChart>
-        </ResponsiveContainer>
+        <div style={{ width: '100%', height: 180 }}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+            <LineChart data={visitData}>
+              <XAxis dataKey="week" fontSize={10} />
+              <YAxis fontSize={10} allowDecimals={false} />
+              <Tooltip />
+              <Line type="monotone" dataKey="visits" stroke="#f472b6" strokeWidth={2} dot />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </section>
     </>
   )

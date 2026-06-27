@@ -230,7 +230,7 @@ export default function TimelinePage() {
               </div>
               <div className="tl-chart-body">
                 {moodChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                     <AreaChart data={moodChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="tlMoodGrad" x1="0" y1="0" x2="0" y2="1">
@@ -277,7 +277,7 @@ export default function TimelinePage() {
               </div>
               <div className="tl-chart-body">
                 {weightChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                     <AreaChart data={weightChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                       <defs>
                         <linearGradient id="tlWeightGrad" x1="0" y1="0" x2="0" y2="1">
@@ -324,7 +324,7 @@ export default function TimelinePage() {
               </div>
               <div className="tl-chart-body">
                 {symptomCounts.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                     <BarChart data={symptomCounts.slice(0, 5)} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid vertical={false} strokeDasharray="3 3" stroke={gridStroke} />
                       <XAxis dataKey="name" tick={{ fontSize: 10, fill: axisColor }} axisLine={false} tickLine={false} interval={0} />

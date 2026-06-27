@@ -44,6 +44,14 @@ def _serialize_message(m: Message) -> dict:
 
 
 def _serialize_conversation(c: Conversation, include_messages: bool = False) -> dict:
+    # The message that triggered escalation (if any) — preferred for the queue preview;
+    # falls back to the latest mother message so the provider always has context.
+    preview_msg = (
+        c.messages_v2.filter(triggered_escalation=True).order_by('-created_at').first()
+        or c.messages_v2.filter(sender_type='mother').order_by('-created_at').first()
+        or c.messages_v2.order_by('-created_at').first()
+    )
+
     data = {
         'id': c.id,
         'mother_id': c.mother_id,
@@ -55,6 +63,8 @@ def _serialize_conversation(c: Conversation, include_messages: bool = False) -> 
         'escalated_at': c.escalated_at.isoformat() if c.escalated_at else None,
         'created_at': c.created_at.isoformat(),
         'updated_at': c.updated_at.isoformat(),
+        'last_message': preview_msg.content if preview_msg else '',
+        'last_message_sender': preview_msg.sender_type if preview_msg else None,
     }
     if include_messages:
         data['messages'] = [_serialize_message(m) for m in c.messages_v2.all()]

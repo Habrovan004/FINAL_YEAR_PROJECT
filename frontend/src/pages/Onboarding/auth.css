@@ -331,6 +331,80 @@
   animation: fadeUp 0.4s 0.18s ease both;
 }
 
+.role-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 6px;
+  border-radius: 14px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+}
+
+.role-card:hover { border-color: var(--border-pink); color: var(--accent); }
+.role-card:active { transform: scale(0.97); }
+
+.role-card--active {
+  background: var(--bg-pink);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.field-input--error {
+  border-color: var(--error) !important;
+}
+
+.field-inline-error {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--error);
+}
+
+.field-with-action {
+  position: relative;
+}
+
+.field-with-action .field-input {
+  padding-right: 44px;
+}
+
+.field-action-btn {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 8px;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.field-action-btn:hover {
+  color: var(--accent);
+  background: var(--bg-pink);
+}
+
 /* ════════════════════════════════════
    OTP PAGE
    ════════════════════════════════════ */

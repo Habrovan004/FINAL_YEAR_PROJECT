@@ -25,14 +25,17 @@ const ROLES: { id: LoginRole; labelKey: string; Icon: typeof Baby }[] = [
 ]
 
 /**
- * Accepts `0XXXXXXXXX`, `+255XXXXXXXXX`, or `XXXXXXXXX` and returns
- * the canonical `0XXXXXXXXX` form. Returns null if it can't be coerced.
+ * Tolerates `0XXXXXXXXX`, `+255XXXXXXXXX`, `255XXXXXXXXX`, or bare 9-digit input.
+ * Preserves the user's chosen format whenever already valid — the backend stores
+ * phones verbatim, so converting between `0…` and `+255…` would break login.
+ * Returns null if the input isn't a recognisable Tanzanian number.
  */
 function normalizeTzPhone(raw: string): string | null {
-  const digits = raw.replace(/\s+/g, '').replace(/^\+?/, '')
-  if (/^0\d{9}$/.test(raw.replace(/\s+/g, ''))) return raw.replace(/\s+/g, '')
-  if (/^255\d{9}$/.test(digits)) return '0' + digits.slice(3)
-  if (/^\d{9}$/.test(digits)) return '0' + digits
+  const cleaned = raw.replace(/\s+/g, '')
+  if (/^0\d{9}$/.test(cleaned)) return cleaned
+  if (/^\+255\d{9}$/.test(cleaned)) return cleaned
+  if (/^255\d{9}$/.test(cleaned)) return '+' + cleaned
+  if (/^\d{9}$/.test(cleaned)) return '0' + cleaned
   return null
 }
 

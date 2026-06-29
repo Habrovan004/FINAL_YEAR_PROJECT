@@ -1,10 +1,12 @@
 from rest_framework import serializers
 from .models import TipCategory, Tip, Bookmark
 
+
 class TipCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = TipCategory
         fields = '__all__'
+
 
 class TipSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
@@ -12,7 +14,19 @@ class TipSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tip
-        fields = '__all__'
+        # Explicit field list so `is_approved` is always present in the
+        # serialized payload (and required to be there even if `fields = '__all__'`
+        # was ever scoped down).
+        fields = [
+            'id',
+            'category', 'category_name',
+            'title', 'title_sw',
+            'description', 'description_sw',
+            'tip_type', 'trimester',
+            'is_daily', 'order',
+            'is_ai_generated', 'is_reviewed', 'is_approved',
+            'is_bookmarked',
+        ]
 
     def get_is_bookmarked(self, obj):
         request = self.context.get('request')

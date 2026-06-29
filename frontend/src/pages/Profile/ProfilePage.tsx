@@ -10,6 +10,7 @@ import {
   Stethoscope,
   UserPlus,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import PageWrapper from '../../components/layout/PageWrapper'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -34,51 +35,49 @@ function addDays(date: Date, days: number) {
   return next
 }
 
-function formatDate(dateStr?: string) {
-  if (!dateStr) return 'Not set'
-
-  const date = new Date(dateStr)
-  if (Number.isNaN(date.getTime())) return 'Not set'
-
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
 function calculateWeek(lmpDate?: string) {
   if (!lmpDate) return null
-
   const lmp = new Date(lmpDate)
   if (Number.isNaN(lmp.getTime())) return null
-
   const diffDays = Math.floor((Date.now() - lmp.getTime()) / MS_PER_DAY)
   return Math.min(42, Math.max(1, Math.floor(diffDays / 7) + 1))
 }
 
-function trimesterLabel(trimester?: string, week?: number | null) {
-  if (trimester) {
-    const normalized = trimester.toLowerCase()
-    if (normalized.includes('1')) return '1st Trimester'
-    if (normalized.includes('2')) return '2nd Trimester'
-    if (normalized.includes('3')) return '3rd Trimester'
-    return trimester
+// Map backend trimester ("1st"/"2nd"/"3rd"/raw) → i18n trimester dict.
+function trimesterKey(t: (k: string) => string, trimester?: string, week?: number | null): string {
+  const raw = (trimester || '').toLowerCase()
+  if (raw.includes('1')) return t('trimester.first')
+  if (raw.includes('2')) return t('trimester.second')
+  if (raw.includes('3')) return t('trimester.third')
+  if (week) {
+    if (week <= 13) return t('trimester.first')
+    if (week <= 27) return t('trimester.second')
+    return t('trimester.third')
   }
-
-  if (!week) return 'Pregnancy'
-  if (week <= 13) return '1st Trimester'
-  if (week <= 27) return '2nd Trimester'
-  return '3rd Trimester'
+  return trimester || ''
 }
 
 export default function ProfilePage() {
   const { user, logout } = useAuth()
   const nav = useNavigate()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language?.startsWith('sw') ? 'sw-TZ' : 'en-US'
+
   const [profile, setProfile] = useState<PatientProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return t('profile_not_set')
+    const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return t('profile_not_set')
+    return date.toLocaleDateString(locale, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  }
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -87,11 +86,11 @@ export default function ProfilePage() {
       setProfile(response.data)
     } catch (e) {
       console.error('Profile fetch error:', e)
-      setError('Could not load profile details. Please try again.')
+      setError(t('profile_load_fail'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     const profileTimer = window.setTimeout(() => {
@@ -115,20 +114,26 @@ export default function ProfilePage() {
     } catch (e) {
       console.error('Notification update error:', e)
       setProfile(previous)
-      setError('Could not update notifications. Please try again.')
+      setError(t('profile_notif_fail'))
     } finally {
       setSaving(false)
     }
   }
 
-  const rawName = user?.full_name?.trim() || 'Mama'
-  const firstName = rawName.split(' ')[0] || 'Mama'
+  const fallbackName = t('profile_mama')
+  const rawName = user?.full_name?.trim() || fallbackName
+  const firstName = rawName.split(' ')[0] || fallbackName
   const initial = firstName[0]?.toUpperCase() || 'M'
   const week = profile?.pregnancy_week || calculateWeek(profile?.lmp_date)
   const dueDate = profile?.due_date || (profile?.lmp_date ? addDays(new Date(profile.lmp_date), 280).toISOString() : '')
-  const pregnancyBadge = week ? `Week ${week} · ${trimesterLabel(profile?.trimester, week)}` : trimesterLabel(profile?.trimester, week)
-  const pregnancySummary = week ? `Week ${week} · Due ${formatDate(dueDate)}` : `Due ${formatDate(dueDate)}`
-  const languageLabel = profile?.language === 'sw' ? 'Swahili' : 'English'
+  const trimester = trimesterKey(t, profile?.trimester, week)
+  const pregnancyBadge = week
+    ? t('profile_week_trimester', { week, trimester })
+    : (trimester || t('profile_pregnancy'))
+  const pregnancySummary = week
+    ? t('profile_week_due', { week, date: formatDate(dueDate) })
+    : t('profile_due_only', { date: formatDate(dueDate) })
+  const languageLabel = profile?.language === 'sw' ? t('profile_lang_sw') : t('profile_lang_en')
   const notificationsOn = profile?.notifications_enabled !== false
 
   if (loading) {
@@ -141,29 +146,40 @@ export default function ProfilePage() {
     )
   }
 
+  // The Notifications row is the only menu item that triggers an inline action
+  // (toggling state) rather than navigating — we tag it so we can disable just
+  // that row during the PATCH.
+  const NOTIFICATIONS_KEY = 'notifications'
+
   const menuItems = [
     {
+      key: 'invite-partner',
       icon: UserPlus,
-      label: 'Invite your partner',
-      sub: 'Share support through a link or code',
+      label: t('profile_invite_partner'),
+      sub: t('profile_invite_partner_sub'),
       action: () => nav('/profile/partner'),
     },
     {
+      key: 'partner-view',
       icon: Eye,
-      label: 'See partner view',
-      sub: 'Preview what your partner can see',
+      label: t('profile_partner_view'),
+      sub: t('profile_partner_view_sub'),
       action: () => nav('/profile/partner'),
     },
     {
+      key: 'language',
       icon: Languages,
-      label: `Language · ${languageLabel}`,
-      sub: 'Switch between English and Swahili',
+      label: t('profile_language_label', { language: languageLabel }),
+      sub: t('profile_language_sub'),
       action: () => nav('/profile/settings'),
     },
     {
+      key: NOTIFICATIONS_KEY,
       icon: Bell,
-      label: `Notifications · ${notificationsOn ? 'On' : 'Off'}`,
-      sub: 'Weekly tips and appointment reminders',
+      label: t('profile_notifications', {
+        state: notificationsOn ? t('profile_notif_on') : t('profile_notif_off'),
+      }),
+      sub: t('profile_notifications_sub'),
       action: updateNotification,
     },
   ]
@@ -195,7 +211,7 @@ export default function ProfilePage() {
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50">
               <Baby size={22} className="text-rose-500" />
             </div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Pregnancy</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('profile_pregnancy')}</p>
             <p className="mt-1 text-sm font-black leading-snug text-gray-800">{pregnancySummary}</p>
           </button>
 
@@ -206,37 +222,40 @@ export default function ProfilePage() {
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50">
               <Stethoscope size={22} className="text-emerald-500" />
             </div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Hospital</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('profile_hospital')}</p>
             <p className="mt-1 text-sm font-black leading-snug text-gray-800">
-              {profile?.hospital_name || 'Select hospital'}
+              {profile?.hospital_name || t('profile_select_hospital')}
             </p>
           </button>
         </section>
 
         <section className="mt-5 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-          {menuItems.map(({ icon: Icon, label, sub, action }, index) => (
-            <button
-              key={label}
-              onClick={action}
-              disabled={saving && label.startsWith('Notifications')}
-              className={`flex w-full items-center gap-4 p-4 text-left transition-colors active:bg-gray-50 ${
-                index > 0 ? 'border-t border-gray-50' : ''
-              }`}
-            >
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50">
-                <Icon size={20} className="text-rose-500" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-black text-gray-800">{label}</p>
-                <p className="mt-0.5 text-[11px] font-medium leading-snug text-gray-500">{sub}</p>
-              </div>
-              {saving && label.startsWith('Notifications') ? (
-                <Loader2 size={16} className="animate-spin text-rose-400" />
-              ) : (
-                <ChevronRight size={18} className="text-gray-300" />
-              )}
-            </button>
-          ))}
+          {menuItems.map(({ key, icon: Icon, label, sub, action }, index) => {
+            const isBusyRow = saving && key === NOTIFICATIONS_KEY
+            return (
+              <button
+                key={key}
+                onClick={action}
+                disabled={isBusyRow}
+                className={`flex w-full items-center gap-4 p-4 text-left transition-colors active:bg-gray-50 ${
+                  index > 0 ? 'border-t border-gray-50' : ''
+                }`}
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-rose-50">
+                  <Icon size={20} className="text-rose-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-black text-gray-800">{label}</p>
+                  <p className="mt-0.5 text-[11px] font-medium leading-snug text-gray-500">{sub}</p>
+                </div>
+                {isBusyRow ? (
+                  <Loader2 size={16} className="animate-spin text-rose-400" />
+                ) : (
+                  <ChevronRight size={18} className="text-gray-300" />
+                )}
+              </button>
+            )
+          })}
         </section>
 
         <button
@@ -247,7 +266,7 @@ export default function ProfilePage() {
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-50 py-4 text-xs font-black uppercase tracking-widest text-rose-500"
         >
           <LogOut size={16} />
-          Log out
+          {t('profile_log_out')}
         </button>
       </div>
     </PageWrapper>

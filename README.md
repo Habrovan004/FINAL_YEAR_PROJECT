@@ -19,8 +19,14 @@ uzazi-safe-link/
 ```bash
 cd backend
 
-# Install dependencies
-pip install django djangorestframework djangorestframework-simplejwt django-cors-headers Pillow
+# Install dependencies (pinned in requirements.txt)
+pip install -r requirements.txt
+
+# Configure environment — copy the template and fill in real values
+cp .env.example .env
+#  • GEMINI_API_KEY — get one at https://aistudio.google.com/app/apikey
+#  • SECRET_KEY     — any random 50-char string
+#  • EMAIL_*        — Gmail app password or another SMTP provider
 
 # Run migrations
 python manage.py migrate
@@ -37,6 +43,14 @@ python manage.py runserver
 
 API runs at: **http://localhost:8000**
 Admin panel: **http://localhost:8000/admin**
+
+### Health Assistant (AI chatbot)
+The mother-facing chat is powered by Google Gemini (default model
+`gemini-2.5-flash`). The integration lives in
+`backend/services/gemini_service.py` and is consumed by
+`backend/chatbot/ai_engine.py`. When `GEMINI_API_KEY` is empty the engine
+returns a clearly-marked "service unavailable" reply instead of a fake answer.
+Status probe: `GET /api/chatbot/status/` → `{ai_available, model}`.
 
 ---
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, AlertCircle, Sparkles, Stethoscope, Loader2, WifiOff } from 'lucide-react'
+import { ArrowLeft, Send, AlertCircle, Sparkles, Stethoscope, Loader2, WifiOff, ShieldAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
 import './chat.css'
@@ -23,18 +23,43 @@ interface ConversationResponse {
   messages: Msg[]
 }
 
+interface ChatbotStatus {
+  ai_available: boolean
+  model: string
+}
+
 export default function ChatPage() {
   const nav = useNavigate()
   const { i18n, t } = useTranslation()
   const lang = i18n.language?.startsWith('sw') ? 'sw' : 'en'
+
   const [convo, setConvo] = useState<ConversationResponse | null>(null)
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [aiAvailable, setAiAvailable] = useState(true)
+  const [status, setStatus] = useState<ChatbotStatus | null>(null)
   const [sendError, setSendError] = useState('')
+
   const pollRef = useRef<number | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
+
+  // ── Health-check the AI on mount so we can show the Online / Offline pill.
+  useEffect(() => {
+    let cancelled = false
+    api.get<ChatbotStatus>('/chatbot/status/')
+      .then(r => {
+        if (cancelled) return
+        setStatus(r.data)
+        setAiAvailable(r.data.ai_available)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setStatus({ ai_available: false, model: 'unknown' })
+        setAiAvailable(false)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   const open = async () => {
     setLoading(true)
@@ -67,7 +92,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [convo?.messages?.length])
+  }, [convo?.messages?.length, sending])
 
   const send = async () => {
     if (!convo || !text.trim() || sending) return
@@ -87,7 +112,6 @@ export default function ChatPage() {
       if (r.data.conversation_type) updated.type = r.data.conversation_type
       if (r.data.escalated) updated.escalated_at = new Date().toISOString()
       setConvo(updated)
-      // Backend tells us whether the AI service is currently reachable.
       if (typeof r.data.ai_available === 'boolean') {
         setAiAvailable(r.data.ai_available)
       }
@@ -108,17 +132,36 @@ export default function ChatPage() {
   }
 
   const isLive = convo.type === 'provider'
+  // While we wait for an AI reply we render an inline typing bubble.
+  // Don't show it once the conversation has flipped to a live provider
+  // (the bot is no longer in the loop).
+  const showTyping = sending && !isLive
+
+  const headerTitle = isLive
+    ? t('chat_connected_nurse')
+    : t('health_assistant')
 
   return (
-    <div className="chat-page">
-      <header className="chat-header">
+    <div className={`chat-page ${isLive ? 'chat-page--live' : ''}`}>
+      <header className={`chat-header ${isLive ? 'chat-header--live' : ''}`}>
         <button onClick={() => nav('/home')} className="chat-back" aria-label={t('back')}>
           <ArrowLeft size={18} />
         </button>
         <div className="chat-title">
           <div className="chat-title-row">
             {isLive ? <Stethoscope size={14} /> : <Sparkles size={14} />}
-            <span>{isLive ? (convo.provider_name || t('provider')) : t('health_assistant')}</span>
+            <span>{headerTitle}</span>
+
+            {/* AI status pill — hidden once a real nurse is on the line */}
+            {!isLive && status && (
+              <span
+                className={`ai-status-pill ${aiAvailable ? 'ai-status-pill--on' : 'ai-status-pill--off'}`}
+                title={status.model ? `Model: ${status.model}` : ''}
+              >
+                <span className="ai-status-dot" />
+                {aiAvailable ? t('chat_ai_online') : t('chat_ai_offline')}
+              </span>
+            )}
           </div>
           <p className="chat-status">
             {isLive ? (
@@ -129,6 +172,12 @@ export default function ChatPage() {
           </p>
         </div>
       </header>
+
+      {/* Always-on disclaimer just below the header */}
+      <div className="chat-disclaimer" role="note">
+        <ShieldAlert size={14} />
+        <span>{t('chat_disclaimer')}</span>
+      </div>
 
       {!aiAvailable && !isLive && (
         <div className="chat-warning-banner" role="status">
@@ -165,6 +214,20 @@ export default function ChatPage() {
             </div>
           )
         })}
+
+        {showTyping && (
+          <div className="bubble-wrap other" aria-live="polite" aria-label={t('chat_typing')}>
+            <div className="bubble bubble-chatbot typing-bubble">
+              <p className="bubble-label"><Sparkles size={9} /> {t('health_assistant').toUpperCase()}</p>
+              <div className="typing-dots" aria-hidden="true">
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div ref={bottomRef} />
       </main>
 

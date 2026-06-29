@@ -130,11 +130,11 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# ── AI (Anthropic Claude) ──────────────────────────────────────────────────
-# Get a key at https://console.anthropic.com/. The chat falls back to a
-# friendly "service unavailable" message if the key is missing or invalid.
-ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
-ANTHROPIC_MODEL = config('ANTHROPIC_MODEL', default='claude-haiku-4-5-20251001')
+# ── AI (Google Gemini) ─────────────────────────────────────────────────────
+# Get a key at https://aistudio.google.com/app/apikey. The chat falls back to
+# a friendly "service unavailable" message if the key is missing or invalid.
+GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.5-flash')
 
 # Conversation history sent to the model (covers ~10 user/assistant turns).
 AI_CHAT_HISTORY_LIMIT = config('AI_CHAT_HISTORY_LIMIT', default=20, cast=int)

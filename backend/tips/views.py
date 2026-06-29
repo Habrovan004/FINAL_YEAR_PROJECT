@@ -6,14 +6,25 @@ from .models import TipCategory, Tip, Bookmark
 from .serializers import TipCategorySerializer, TipSerializer
 from django.db.models import Q
 
+MANAGEMENT_ROLES = {'hospital_manager', 'admin'}
+
+
+def _is_manager_or_admin(user) -> bool:
+    user_type = getattr(user, 'user_type', '') or ''
+    return bool(user.is_staff) or user_type in MANAGEMENT_ROLES
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def tip_list(request):
     """
     Get list of tips with advanced filtering.
-    Only returns tips that have been reviewed (is_reviewed=True).
+    Patient-facing GETs only return tips that are approved AND reviewed.
+    Managers / admins see every tip so they can approve drafts.
     """
-    tips = Tip.objects.filter(is_reviewed=True) # Filter for reviewed tips only
+    tips = Tip.objects.all()
+    if not _is_manager_or_admin(request.user):
+        tips = tips.filter(is_approved=True, is_reviewed=True)
     trimester = request.query_params.get('trimester')
     category_id = request.query_params.get('category')
     tip_type = request.query_params.get('type')

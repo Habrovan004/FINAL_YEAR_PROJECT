@@ -1,17 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Clock, Loader2, Scale, FileText } from 'lucide-react'
 import api from '../../api/client'
-import '../Onboarding/auth.css' // Corrected import path
+import '../Onboarding/auth.css'
 import './TrackPage.css'
-
-const MOODS = [
-  { val: 5, emoji: '😄', label: 'Great' },
-  { val: 4, emoji: '😊', label: 'Good' },
-  { val: 3, emoji: '😐', label: 'Okay' },
-  { val: 2, emoji: '😟', label: 'Not well' },
-  { val: 1, emoji: '😢', label: 'Bad' },
-]
 
 interface Symptom {
   id: number
@@ -22,40 +15,61 @@ interface Symptom {
 
 export default function TrackPage() {
   const nav = useNavigate()
+  const { t, i18n } = useTranslation()
+  const isSwahili = i18n.language?.startsWith('sw')
 
-  const [mood, setMood]           = useState<number | null>(null)
-  const [symptomIds, setSymptomIds] = useState<number[]>([]) // Changed to store IDs
-  const [available, setAvailable] = useState<Symptom[]>([])
-  const [weight, setWeight]       = useState('')
-  const [notes, setNotes]         = useState('')
-  const [saved, setSaved]         = useState(false)
-  const [loading, setLoading]     = useState(false)
-  const [fetching, setFetching]   = useState(true)
-  const [error, setError]         = useState('')
+  const MOODS = [
+    { val: 5, emoji: '😄', label: t('mood_great') },
+    { val: 4, emoji: '😊', label: t('mood_good') },
+    { val: 3, emoji: '😐', label: t('mood_okay') },
+    { val: 2, emoji: '😟', label: t('mood_not_well') },
+    { val: 1, emoji: '😢', label: t('mood_bad') },
+  ]
+
+  const [mood, setMood]             = useState<number | null>(null)
+  const [symptomIds, setSymptomIds] = useState<number[]>([])
+  const [available, setAvailable]   = useState<Symptom[]>([])
+  const [weight, setWeight]         = useState('')
+  const [notes, setNotes]           = useState('')
+  const [saved, setSaved]           = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [fetching, setFetching]     = useState(true)
+  const [error, setError]           = useState('')
 
   useEffect(() => {
     api.get('/tracking/symptoms/')
         .then(r => setAvailable(r.data))
         .catch(() => {
-          const fallback = ['Nausea', 'Headache', 'Tiredness', 'Heartburn', 'Back pain', 'Swelling', 'Cravings']
-              .map((name, id) => ({ id, name, name_sw: name, icon: '' }))
+          const fallback = ['Nausea', 'Headache', 'Tiredness', 'Heartburn', 'Back pain', 'Swelling (feet/ankles)', 'Cravings']
+              .map((name, id) => ({ id, name, name_sw: '', icon: '' }))
           setAvailable(fallback)
         })
         .finally(() => setFetching(false))
   }, [])
+
+  // Pick the right label per symptom for the active language.
+  // Prefer backend-provided `name_sw`, then i18n dictionary fallback, then English name.
+  const symptomLabel = (s: Symptom) => {
+    if (isSwahili) {
+      if (s.name_sw && s.name_sw.trim()) return s.name_sw
+      const fromDict = t(`symptom.${s.name}`, { defaultValue: s.name })
+      return fromDict
+    }
+    return s.name
+  }
 
   const toggleSymptom = (id: number) =>
       setSymptomIds(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
 
   const save = async () => {
     if (!mood) {
-      setError('Choose your mood before saving your daily record.')
+      setError(t('track_err_mood'))
       return
     }
 
     const parsedWeight = weight.trim() ? Number(weight) : null
     if (parsedWeight !== null && (!Number.isFinite(parsedWeight) || parsedWeight <= 0)) {
-      setError('Enter a valid weight in kilograms, or leave it blank.')
+      setError(t('track_err_weight'))
       return
     }
 
@@ -64,7 +78,7 @@ export default function TrackPage() {
     try {
       await api.post('/tracking/', {
         mood,
-        symptoms: symptomIds, // Send IDs
+        symptoms: symptomIds,
         notes,
         weight_kg: parsedWeight,
       })
@@ -72,21 +86,18 @@ export default function TrackPage() {
       setTimeout(() => nav('/timeline'), 1600)
     } catch (e) {
       console.error('Error saving daily record', e)
-      setError('Could not save your daily record. Please try again.')
+      setError(t('track_err_generic'))
     } finally {
       setLoading(false)
     }
   }
 
-  /* ── Saved success state ── */
   if (saved) {
     return (
         <div className="track-saved">
           <div className="saved-bubble" role="img" aria-label="Success">💚</div>
-          <h2 className="saved-title">Well done!</h2>
-          <p className="saved-sub">
-            Your health data has been successfully recorded for today.
-          </p>
+          <h2 className="saved-title">{t('track_saved_title')}</h2>
+          <p className="saved-sub">{t('track_saved_sub')}</p>
         </div>
     )
   }
@@ -95,12 +106,11 @@ export default function TrackPage() {
       <div className="track-page">
         <div className="track-inner">
 
-          {/* ── Header ── */}
           <header className="track-header">
-            <button className="back-btn" onClick={() => nav('/home')} aria-label="Go back">
+            <button className="back-btn" onClick={() => nav('/home')} aria-label={t('track_back')}>
               <ArrowLeft size={18} />
             </button>
-            <h1 className="track-title">Daily Check-in</h1>
+            <h1 className="track-title">{t('track_title')}</h1>
             <span className="track-header-spacer" aria-hidden="true" />
           </header>
 
@@ -109,17 +119,14 @@ export default function TrackPage() {
               <Clock size={20} />
             </div>
             <div>
-              <p className="track-card-title">Contraction Timer</p>
-              <p className="track-card-sub">Track labour contractions and the 5-1-1 pattern.</p>
+              <p className="track-card-title">{t('track_contraction_timer')}</p>
+              <p className="track-card-sub">{t('track_contraction_sub')}</p>
             </div>
           </button>
 
-          {/* ── Mood card ── */}
           <div className="track-card">
-            <p className="track-card-title">How's your mood today?</p>
-            <p className="track-card-sub">
-              Emotional health is just as important as physical health.
-            </p>
+            <p className="track-card-title">{t('track_mood_title')}</p>
+            <p className="track-card-sub">{t('track_mood_sub')}</p>
             <div className="mood-row">
               {MOODS.map(m => (
                   <button
@@ -136,15 +143,12 @@ export default function TrackPage() {
             </div>
           </div>
 
-          {/* ── Weight card ── */}
           <div className="track-card">
             <p className="track-card-title">
               <Scale size={16} style={{ color: 'var(--accent)' }} />
-              Weight monitoring
+              {t('track_weight_title')}
             </p>
-            <p className="track-card-sub">
-              Tracking your weight helps monitor your baby's growth.
-            </p>
+            <p className="track-card-sub">{t('track_weight_sub')}</p>
             <div className="weight-wrap">
               <span className="weight-prefix">kg</span>
               <input
@@ -152,17 +156,16 @@ export default function TrackPage() {
                   type="number"
                   step="0.1"
                   min="0"
-                  placeholder="e.g. 65.5"
+                  placeholder={t('track_weight_placeholder')}
                   value={weight}
                   onChange={e => setWeight(e.target.value)}
               />
             </div>
           </div>
 
-          {/* ── Symptoms card ── */}
           <div className="track-card">
-            <p className="track-card-title">Any symptoms today?</p>
-            <p className="track-card-sub">Select anything you've felt today.</p>
+            <p className="track-card-title">{t('track_symptoms_title')}</p>
+            <p className="track-card-sub">{t('track_symptoms_sub')}</p>
             {fetching ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
                   <Loader2 size={24} className="track-spin" style={{ color: 'var(--accent)' }} />
@@ -176,25 +179,22 @@ export default function TrackPage() {
                           onClick={() => toggleSymptom(s.id)}
                           aria-pressed={symptomIds.includes(s.id)}
                       >
-                        {s.name}
+                        {symptomLabel(s)}
                       </button>
                   ))}
                 </div>
             )}
           </div>
 
-          {/* ── Notes card ── */}
           <div className="track-card">
             <p className="track-card-title">
               <FileText size={16} style={{ color: 'var(--accent)' }} />
-              Notes
+              {t('track_notes_title')}
             </p>
-            <p className="track-card-sub">
-              Any questions for your next clinic visit?
-            </p>
+            <p className="track-card-sub">{t('track_notes_sub')}</p>
             <textarea
                 className="notes-textarea"
-                placeholder="Write down anything on your mind…"
+                placeholder={t('track_notes_placeholder')}
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
             />
@@ -206,7 +206,6 @@ export default function TrackPage() {
               </div>
           )}
 
-          {/* ── CTA ── */}
           <div className="track-cta">
             <button
                 className="btn-primary"
@@ -214,8 +213,8 @@ export default function TrackPage() {
                 disabled={!mood || loading}
             >
               {loading
-                  ? <><Loader2 size={16} className="track-spin" /> Saving…</>
-                  : 'Save Daily Record'}
+                  ? <><Loader2 size={16} className="track-spin" /> {t('track_saving')}</>
+                  : t('track_save_btn')}
             </button>
           </div>
 

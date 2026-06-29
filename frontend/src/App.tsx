@@ -80,6 +80,10 @@ function GlobalControls() {
     location.pathname === '/' ||
     ONBOARDING_PATH_PREFIXES.some(prefix => location.pathname.startsWith(prefix))
 
+  // Pages that render their own theme / language toggles in the header row.
+  const PAGES_WITH_OWN_CONTROLS = ['/provider/dashboard', '/manager/dashboard']
+  if (PAGES_WITH_OWN_CONTROLS.includes(location.pathname)) return null
+
   const toggleLanguage = () => {
     const nextLanguage = activeLanguage === 'sw' ? 'en' : 'sw'
     void i18n.changeLanguage(nextLanguage)

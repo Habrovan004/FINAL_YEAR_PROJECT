@@ -1,120 +1,171 @@
 import { useMemo, useState } from 'react'
-import { Activity, ArrowLeft, Ear, Heart, HeartPulse, Loader2, Play, ShieldCheck } from 'lucide-react'
+import { Activity, ArrowLeft, Ear, Heart, HeartPulse, Loader2, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import PageWrapper from '../../components/layout/PageWrapper'
 import './BabyGrowthPage.css'
 
 interface GrowthWeek {
   week: number
-  trimester: string
+  trimesterKey: 'trimester.first' | 'trimester.second' | 'trimester.third'
   emoji: string
-  size: string
-  length: string
-  note: string
-  babyFacts: string[]
-  motherFeels: string[]
+  // Localised content lives alongside English in the same row to keep this
+  // page self-contained and avoid bloating the i18n.ts dictionary with 60+
+  // per-week keys.
+  en: { size: string; length: string; note: string; babyFacts: string[]; motherFeels: string[] }
+  sw: { size: string; length: string; note: string; babyFacts: string[]; motherFeels: string[] }
 }
 
 const WEEK_DATA: GrowthWeek[] = [
   {
-    week: 4,
-    trimester: '1st Trimester',
-    emoji: '🌱',
-    size: 'poppy seed',
-    length: 'About 0.2 cm',
-    note: 'The neural tube and early placenta are forming.',
-    babyFacts: ['Early brain and spine cells are developing', 'The placenta starts supporting growth'],
-    motherFeels: ['Missed period', 'Tender breasts', 'Tiredness may begin'],
+    week: 4, trimesterKey: 'trimester.first', emoji: '🌱',
+    en: {
+      size: 'poppy seed', length: 'About 0.2 cm',
+      note: 'The neural tube and early placenta are forming.',
+      babyFacts: ['Early brain and spine cells are developing', 'The placenta starts supporting growth'],
+      motherFeels: ['Missed period', 'Tender breasts', 'Tiredness may begin'],
+    },
+    sw: {
+      size: 'mbegu ya popi', length: 'Takriban sm 0.2',
+      note: 'Mrija wa neva na placenta ya awali zinaundwa.',
+      babyFacts: ['Seli za awali za ubongo na mgongo zinakua', 'Placenta inaanza kusaidia ukuaji'],
+      motherFeels: ['Hedhi kukosa', 'Maumivu ya matiti', 'Uchovu unaweza kuanza'],
+    },
   },
   {
-    week: 8,
-    trimester: '1st Trimester',
-    emoji: '🫐',
-    size: 'blueberry',
-    length: 'About 1.6 cm',
-    note: 'Tiny arms, legs, and facial features are taking shape.',
-    babyFacts: ['Heartbeat is usually present', 'Fingers and toes are beginning'],
-    motherFeels: ['Nausea can be stronger', 'Frequent urination', 'Food smells may bother you'],
+    week: 8, trimesterKey: 'trimester.first', emoji: '🫐',
+    en: {
+      size: 'blueberry', length: 'About 1.6 cm',
+      note: 'Tiny arms, legs, and facial features are taking shape.',
+      babyFacts: ['Heartbeat is usually present', 'Fingers and toes are beginning'],
+      motherFeels: ['Nausea can be stronger', 'Frequent urination', 'Food smells may bother you'],
+    },
+    sw: {
+      size: 'blueberry', length: 'Takriban sm 1.6',
+      note: 'Mikono midogo, miguu, na sura za uso zinaanza kuunda.',
+      babyFacts: ['Mapigo ya moyo huwa yanasikika', 'Vidole vya mikono na miguu vinaanza'],
+      motherFeels: ['Kichefuchefu kinaweza kuwa kikali', 'Kukojoa mara kwa mara', 'Harufu ya chakula inaweza kusumbua'],
+    },
   },
   {
-    week: 12,
-    trimester: '1st Trimester',
-    emoji: '🍋',
-    size: 'lime',
-    length: 'About 5.4 cm',
-    note: 'Most major organs have formed and will keep maturing.',
-    babyFacts: ['Baby can make small movements', 'Reflexes are starting'],
-    motherFeels: ['Energy may slowly return', 'Waistbands may feel tight', 'Nausea may ease soon'],
+    week: 12, trimesterKey: 'trimester.first', emoji: '🍋',
+    en: {
+      size: 'lime', length: 'About 5.4 cm',
+      note: 'Most major organs have formed and will keep maturing.',
+      babyFacts: ['Baby can make small movements', 'Reflexes are starting'],
+      motherFeels: ['Energy may slowly return', 'Waistbands may feel tight', 'Nausea may ease soon'],
+    },
+    sw: {
+      size: 'limau', length: 'Takriban sm 5.4',
+      note: 'Viungo vingi vikubwa vimeundwa na vitaendelea kukomaa.',
+      babyFacts: ['Mtoto anaweza kufanya mwendo mdogo', 'Mienendo ya akili inaanza'],
+      motherFeels: ['Nguvu inaweza kurejea polepole', 'Mikanda ya kiuno inaweza kubana', 'Kichefuchefu kinaweza kupungua'],
+    },
   },
   {
-    week: 17,
-    trimester: '2nd Trimester',
-    emoji: '🍌',
-    size: 'banana',
-    length: 'About 16.4 cm',
-    note: 'Baby can hear sounds outside the womb.',
-    babyFacts: ['Hearing is developing', 'Tiny fingerprints are forming', 'Baby is practicing swallowing'],
-    motherFeels: ['Kicks becoming more regular', 'Back pain may start', 'You may notice round ligament pain'],
+    week: 17, trimesterKey: 'trimester.second', emoji: '🍌',
+    en: {
+      size: 'banana', length: 'About 16.4 cm',
+      note: 'Baby can hear sounds outside the womb.',
+      babyFacts: ['Hearing is developing', 'Tiny fingerprints are forming', 'Baby is practicing swallowing'],
+      motherFeels: ['Kicks becoming more regular', 'Back pain may start', 'You may notice round ligament pain'],
+    },
+    sw: {
+      size: 'ndizi', length: 'Takriban sm 16.4',
+      note: 'Mtoto anaweza kusikia sauti za nje ya tumbo.',
+      babyFacts: ['Usikivu unakua', 'Alama za vidole zinaundwa', 'Mtoto anajifunza kumeza'],
+      motherFeels: ['Mapigo yanazidi kuwa ya kawaida', 'Maumivu ya mgongo yanaweza kuanza', 'Unaweza kuhisi maumivu ya mishipa'],
+    },
   },
   {
-    week: 20,
-    trimester: '2nd Trimester',
-    emoji: '🥭',
-    size: 'mango',
-    length: 'About 25.6 cm',
-    note: 'Movements may become easier to recognize this week.',
-    babyFacts: ['Sleep and wake cycles are developing', 'Skin is protected by vernix'],
-    motherFeels: ['Stronger flutters or kicks', 'Leg cramps may start', 'Appetite may increase'],
+    week: 20, trimesterKey: 'trimester.second', emoji: '🥭',
+    en: {
+      size: 'mango', length: 'About 25.6 cm',
+      note: 'Movements may become easier to recognize this week.',
+      babyFacts: ['Sleep and wake cycles are developing', 'Skin is protected by vernix'],
+      motherFeels: ['Stronger flutters or kicks', 'Leg cramps may start', 'Appetite may increase'],
+    },
+    sw: {
+      size: 'embe', length: 'Takriban sm 25.6',
+      note: 'Mwendo unaweza kuwa rahisi kutambua wiki hii.',
+      babyFacts: ['Mizunguko ya usingizi na uamsho inakua', 'Ngozi inalindwa na vernix'],
+      motherFeels: ['Mapigo au mwendo wa nguvu zaidi', 'Mikazo ya miguu inaweza kuanza', 'Hamu ya kula inaweza kuongezeka'],
+    },
   },
   {
-    week: 24,
-    trimester: '2nd Trimester',
-    emoji: '🌽',
-    size: 'ear of corn',
-    length: 'About 30 cm',
-    note: 'Lungs are developing important air sacs.',
-    babyFacts: ['Baby responds to sound', 'Taste buds are active'],
-    motherFeels: ['Belly growth feels faster', 'Mild swelling can happen', 'Back strain may increase'],
+    week: 24, trimesterKey: 'trimester.second', emoji: '🌽',
+    en: {
+      size: 'ear of corn', length: 'About 30 cm',
+      note: 'Lungs are developing important air sacs.',
+      babyFacts: ['Baby responds to sound', 'Taste buds are active'],
+      motherFeels: ['Belly growth feels faster', 'Mild swelling can happen', 'Back strain may increase'],
+    },
+    sw: {
+      size: 'sikio la mahindi', length: 'Takriban sm 30',
+      note: 'Mapafu yanakua na mifuko muhimu ya hewa.',
+      babyFacts: ['Mtoto anaitikia sauti', 'Vionjo vya ladha vinatumika'],
+      motherFeels: ['Tumbo linaonekana kukua haraka', 'Uvimbe mdogo unaweza kutokea', 'Mkazo wa mgongo unaweza kuongezeka'],
+    },
   },
   {
-    week: 28,
-    trimester: '3rd Trimester',
-    emoji: '🍆',
-    size: 'eggplant',
-    length: 'About 37.6 cm',
-    note: 'Baby can blink and is building more body fat.',
-    babyFacts: ['Eyes open and close', 'Brain growth is rapid'],
-    motherFeels: ['Shortness of breath may appear', 'Sleep may be harder', 'Braxton Hicks may start'],
+    week: 28, trimesterKey: 'trimester.third', emoji: '🍆',
+    en: {
+      size: 'eggplant', length: 'About 37.6 cm',
+      note: 'Baby can blink and is building more body fat.',
+      babyFacts: ['Eyes open and close', 'Brain growth is rapid'],
+      motherFeels: ['Shortness of breath may appear', 'Sleep may be harder', 'Braxton Hicks may start'],
+    },
+    sw: {
+      size: 'biringanya', length: 'Takriban sm 37.6',
+      note: 'Mtoto anaweza kufumba macho na anajenga mafuta zaidi mwilini.',
+      babyFacts: ['Macho yanafunguka na kufungwa', 'Ukuaji wa ubongo ni wa haraka'],
+      motherFeels: ['Kuhema kunaweza kuonekana', 'Kulala kunaweza kuwa kugumu', 'Mikazo ya Braxton Hicks inaweza kuanza'],
+    },
   },
   {
-    week: 32,
-    trimester: '3rd Trimester',
-    emoji: '🥥',
-    size: 'coconut',
-    length: 'About 42.4 cm',
-    note: 'Baby is gaining weight and practicing breathing movements.',
-    babyFacts: ['Bones are hardening', 'Movements may feel stronger but less roomy'],
-    motherFeels: ['Pelvic pressure', 'Heartburn may increase', 'More frequent urination'],
+    week: 32, trimesterKey: 'trimester.third', emoji: '🥥',
+    en: {
+      size: 'coconut', length: 'About 42.4 cm',
+      note: 'Baby is gaining weight and practicing breathing movements.',
+      babyFacts: ['Bones are hardening', 'Movements may feel stronger but less roomy'],
+      motherFeels: ['Pelvic pressure', 'Heartburn may increase', 'More frequent urination'],
+    },
+    sw: {
+      size: 'nazi', length: 'Takriban sm 42.4',
+      note: 'Mtoto anaongeza uzito na kujifunza mwendo wa kupumua.',
+      babyFacts: ['Mifupa inakuwa ngumu', 'Mwendo unaweza kuhisi wa nguvu lakini nafasi ni ndogo'],
+      motherFeels: ['Shinikizo la nyonga', 'Kiungulia kinaweza kuongezeka', 'Kukojoa zaidi'],
+    },
   },
   {
-    week: 36,
-    trimester: '3rd Trimester',
-    emoji: '🍈',
-    size: 'melon',
-    length: 'About 47.4 cm',
-    note: 'Baby is getting ready for birth.',
-    babyFacts: ['Baby may move head-down', 'Lungs are nearly mature'],
-    motherFeels: ['Pressure lower in the belly', 'Walking may feel slower', 'Practice contractions'],
+    week: 36, trimesterKey: 'trimester.third', emoji: '🍈',
+    en: {
+      size: 'melon', length: 'About 47.4 cm',
+      note: 'Baby is getting ready for birth.',
+      babyFacts: ['Baby may move head-down', 'Lungs are nearly mature'],
+      motherFeels: ['Pressure lower in the belly', 'Walking may feel slower', 'Practice contractions'],
+    },
+    sw: {
+      size: 'tikiti', length: 'Takriban sm 47.4',
+      note: 'Mtoto anajiandaa kwa kuzaliwa.',
+      babyFacts: ['Mtoto anaweza kugeuka kichwa chini', 'Mapafu yanakaribia kukomaa'],
+      motherFeels: ['Shinikizo chini ya tumbo', 'Kutembea kunaweza kuhisi polepole', 'Mikazo ya mazoezi'],
+    },
   },
   {
-    week: 40,
-    trimester: '3rd Trimester',
-    emoji: '🎉',
-    size: 'small pumpkin',
-    length: 'About 51.2 cm',
-    note: 'Baby is full term and ready to meet you.',
-    babyFacts: ['Organs are ready for life outside', 'Baby continues gaining a little weight'],
-    motherFeels: ['More pelvic pressure', 'Stronger contractions may begin', 'Call care when labor signs start'],
+    week: 40, trimesterKey: 'trimester.third', emoji: '🎉',
+    en: {
+      size: 'small pumpkin', length: 'About 51.2 cm',
+      note: 'Baby is full term and ready to meet you.',
+      babyFacts: ['Organs are ready for life outside', 'Baby continues gaining a little weight'],
+      motherFeels: ['More pelvic pressure', 'Stronger contractions may begin', 'Call care when labor signs start'],
+    },
+    sw: {
+      size: 'malenge dogo', length: 'Takriban sm 51.2',
+      note: 'Mtoto amekamilika na yuko tayari kukutana nawe.',
+      babyFacts: ['Viungo viko tayari kwa maisha ya nje', 'Mtoto anaendelea kuongeza uzito kidogo'],
+      motherFeels: ['Shinikizo zaidi la nyonga', 'Mikazo ya nguvu inaweza kuanza', 'Pigia huduma ukianza kuona dalili za leba'],
+    },
   },
 ]
 
@@ -126,45 +177,49 @@ function getClosestWeek(week: number) {
 
 export default function BabyGrowthPage() {
   const nav = useNavigate()
+  const { t, i18n } = useTranslation()
+  const isSwahili = i18n.language?.startsWith('sw')
   const [selectedWeek, setSelectedWeek] = useState(17)
 
   const weekData = useMemo(() => getClosestWeek(selectedWeek), [selectedWeek])
   const displayWeek = selectedWeek
   const isExactWeek = weekData.week === selectedWeek
+  const localized = isSwahili ? weekData.sw : weekData.en
+  const trimester = t(weekData.trimesterKey)
 
   const babyFacts = isExactWeek
-    ? weekData.babyFacts
-    : [`Preview based on Week ${weekData.week}`, weekData.note]
+    ? localized.babyFacts
+    : [t('bg_preview_based', { week: weekData.week }), localized.note]
 
   return (
     <PageWrapper>
       <div className="growth-page">
         <header className="growth-header">
-          <button className="growth-back" onClick={() => nav('/home')} aria-label="Go back">
+          <button className="growth-back" onClick={() => nav('/home')} aria-label={t('bg_back')}>
             <ArrowLeft size={19} />
           </button>
           <div className="growth-heading">
-            <h1>Baby growth</h1>
-            <p>Week {displayWeek} · {weekData.trimester}</p>
+            <h1>{t('bg_title')}</h1>
+            <p>{t('bg_week_trim', { week: displayWeek, trimester })}</p>
           </div>
-          <div className="growth-header-emoji" role="img" aria-label={`${weekData.size} size`}>
+          <div className="growth-header-emoji" role="img" aria-label={`${localized.size} size`}>
             {weekData.emoji}
           </div>
         </header>
 
         <section className="growth-hero">
-          <p className="growth-eyebrow">{weekData.trimester}</p>
-          <h2>Week {displayWeek}</h2>
-          <div className="growth-big-emoji" role="img" aria-label={`${weekData.size} size`}>
+          <p className="growth-eyebrow">{trimester}</p>
+          <h2>{t('bg_week_label', { week: displayWeek })}</h2>
+          <div className="growth-big-emoji" role="img" aria-label={`${localized.size} size`}>
             {weekData.emoji}
           </div>
-          <p className="growth-size">Size of a {weekData.size}</p>
-          <p className="growth-length">{weekData.length}</p>
+          <p className="growth-size">{t('bg_size_of', { size: localized.size })}</p>
+          <p className="growth-length">{localized.length}</p>
         </section>
 
         <section className="growth-card">
           <div className="growth-slider-top">
-            <p>Explore another week</p>
+            <p>{t('bg_explore')}</p>
             <span>{displayWeek}</span>
           </div>
           <input
@@ -174,7 +229,7 @@ export default function BabyGrowthPage() {
             max="40"
             value={selectedWeek}
             onChange={(event) => setSelectedWeek(Number(event.target.value))}
-            aria-label="Select pregnancy week"
+            aria-label={t('bg_select_aria')}
           />
           <div className="growth-slider-labels">
             <span>4</span>
@@ -182,19 +237,12 @@ export default function BabyGrowthPage() {
           </div>
         </section>
 
-        <section className="growth-video">
-          <button className="growth-play" aria-label="Play animation">
-            <Play size={28} fill="currentColor" />
-          </button>
-        </section>
-        <div className="growth-video-copy">
-          <p>How your baby looks this week</p>
-          <span>30-second animation · low data</span>
-        </div>
+        {/* Animation slot intentionally hidden until video assets ship —
+            previously a dead Play button. */}
 
         <section className="growth-card">
-          <p className="growth-section-title">What's happening inside</p>
-          <p className="growth-note">{weekData.note}</p>
+          <p className="growth-section-title">{t('bg_whats_happening')}</p>
+          <p className="growth-note">{localized.note}</p>
           <div className="growth-list">
             {babyFacts.map((fact, index) => {
               const Icon = index === 0 ? Ear : ShieldCheck
@@ -209,9 +257,9 @@ export default function BabyGrowthPage() {
         </section>
 
         <section className="growth-card">
-          <p className="growth-section-title">What you may feel</p>
+          <p className="growth-section-title">{t('bg_what_you_feel')}</p>
           <div className="growth-list">
-            {weekData.motherFeels.map((feeling, index) => {
+            {localized.motherFeels.map((feeling, index) => {
               const Icon = index === 0 ? Heart : index === 1 ? Activity : HeartPulse
               return (
                 <div className="growth-list-item" key={feeling}>
@@ -225,7 +273,7 @@ export default function BabyGrowthPage() {
 
         <div className="growth-loading-note">
           <Loader2 size={14} />
-          Content is optimized for low data use.
+          {t('bg_low_data_note')}
         </div>
       </div>
     </PageWrapper>

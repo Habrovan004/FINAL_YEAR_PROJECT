@@ -220,6 +220,7 @@ def manager_content(request):
             'trimester': t.trimester,
             'is_daily': t.is_daily,
             'is_reviewed': t.is_reviewed,
+            'is_approved': t.is_approved,
             'is_ai_generated': t.is_ai_generated,
         } for t in tips])
 
@@ -244,7 +245,8 @@ def manager_content(request):
         tip_type=data.get('tip_type', 'tip'),
         trimester=data.get('trimester', 'all'),
         is_daily=bool(data.get('is_daily', False)),
-        is_reviewed=bool(data.get('is_reviewed', True)),  # manager-created = approved
+        is_reviewed=bool(data.get('is_reviewed', True)),  # manager-created = reviewed
+        is_approved=bool(data.get('is_approved', True)),  # manager-created = approved
     )
     return Response({'id': tip.id}, status=status.HTTP_201_CREATED)
 
@@ -273,10 +275,12 @@ def manager_content_detail(request, pk):
         tip.is_daily = bool(data['is_daily'])
     if 'is_reviewed' in data:
         tip.is_reviewed = bool(data['is_reviewed'])
+    if 'is_approved' in data:
+        tip.is_approved = bool(data['is_approved'])
     if 'category_id' in data and data['category_id']:
         tip.category_id = data['category_id']
     tip.save()
-    return Response({'ok': True})
+    return Response({'ok': True, 'is_approved': tip.is_approved})
 
 
 @api_view(['GET', 'POST'])

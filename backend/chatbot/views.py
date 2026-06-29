@@ -4,27 +4,32 @@ Health Assistant chat endpoints.
 Workflow:
   1. Mother opens chat → GET /api/chatbot/conversation/
   2. Mother sends message → POST /api/chatbot/message/
+     - Fetches per-patient context (name, week, risk, last BP, hospital)
+       and forwards it to the AI engine so replies are personalised.
      - AI engine generates a reply with full conversation context.
      - If the AI flags a real medical emergency (escalate=true), the
        conversation flips to `provider` and the assigned provider sees it
        in their queue.
   3. Provider views queue → GET /api/chatbot/provider/queue/
   4. Either party fetches history → GET /api/chatbot/conversation/<id>/messages/
+  5. Health-check ping for the chat header badge:
+       GET /api/chatbot/status/ → {ai_available, model}
 
 There are NO keyword-based or canned responses in the production path. When
 the AI service is unavailable, the engine returns a clearly-marked
 "service unavailable" message instead of fake answers.
 """
 import logging
+from typing import Optional
 
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Conversation, Message
-from .ai_engine import process_message
+from .ai_engine import process_message, is_ai_available, get_active_model
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +49,6 @@ def _serialize_message(m: Message) -> dict:
 
 
 def _serialize_conversation(c: Conversation, include_messages: bool = False) -> dict:
-    # The message that triggered escalation (if any) — preferred for the queue preview;
-    # falls back to the latest mother message so the provider always has context.
     preview_msg = (
         c.messages_v2.filter(triggered_escalation=True).order_by('-created_at').first()
         or c.messages_v2.filter(sender_type='mother').order_by('-created_at').first()
@@ -85,6 +88,80 @@ def _greeting(language: str) -> str:
         "pregnancy, labour, or newborn care. "
         "I understand both English and Swahili — just write in whichever you prefer."
     )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Patient context builder — used to personalise every AI reply.
+# ──────────────────────────────────────────────────────────────────────
+def _build_patient_context(user) -> Optional[dict]:
+    """Snapshot the patient state we feed into the AI's system prompt.
+
+    Returns a dict with {name, week, risk, bp_systolic, bp_diastolic, hospital}
+    or None if `user` doesn't have a patient profile (e.g. provider, manager).
+    """
+    profile = getattr(user, 'profile', None)
+    if profile is None:
+        return None
+
+    name = (user.full_name or '').split(' ')[0] or user.full_name or 'Mama'
+
+    try:
+        week = profile.pregnancy_week()  # method on PatientProfile
+    except Exception:  # noqa: BLE001
+        week = 0
+
+    hospital_name = 'unknown'
+    if getattr(profile, 'hospital_id', None):
+        try:
+            hospital_name = profile.hospital.name
+        except Exception:  # noqa: BLE001
+            hospital_name = 'unknown'
+
+    # Pull the most recent ANC visit for BP + clinical risk_level.
+    bp_sys: object = 'unknown'
+    bp_dia: object = 'unknown'
+    risk = 'unknown'
+    try:
+        latest_visit = (
+            user.anc_visits.order_by('-created_at').first()
+            if hasattr(user, 'anc_visits') else None
+        )
+        if latest_visit:
+            bp_sys = latest_visit.blood_pressure_systolic or 'unknown'
+            bp_dia = latest_visit.blood_pressure_diastolic or 'unknown'
+            risk = latest_visit.risk_level or 'unknown'
+    except Exception as e:  # noqa: BLE001
+        logger.debug("Could not load latest ANC visit for context: %s", e)
+
+    return {
+        'name': name,
+        'week': week,
+        'risk': risk,
+        'bp_systolic': bp_sys,
+        'bp_diastolic': bp_dia,
+        'hospital': hospital_name,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Endpoints
+# ──────────────────────────────────────────────────────────────────────
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def chatbot_status(request):
+    """Health-check for the chat header badge.
+
+    Returns:
+        {
+          "ai_available": bool,   # true if SDK + key are both present
+          "model":        str,    # the model the engine would call right now
+        }
+    """
+    _ = request  # unused
+    return Response({
+        'ai_available': is_ai_available(),
+        'model': get_active_model(),
+    })
 
 
 @api_view(['GET', 'POST'])
@@ -172,8 +249,14 @@ def post_message(request):
             'bot_reply': None,
         }, status=201)
 
-    # Run the AI engine with full context
-    result = process_message(text, history=history_qs, language_hint=language)
+    # Build per-patient context and run the AI engine with full history.
+    patient_context = _build_patient_context(request.user)
+    result = process_message(
+        text,
+        history=history_qs,
+        language_hint=language,
+        patient_context=patient_context,
+    )
     ai_available = result.get('ai_available', True)
 
     if result['escalate']:
@@ -313,7 +396,13 @@ def bot_chat(request):
 
     history_qs = list(convo.messages_v2.all())
     Message.objects.create(conversation=convo, sender=request.user, sender_type='mother', content=text)
-    result = process_message(text, history=history_qs, language_hint=language)
+    patient_context = _build_patient_context(request.user)
+    result = process_message(
+        text,
+        history=history_qs,
+        language_hint=language,
+        patient_context=patient_context,
+    )
     if result['escalate']:
         convo.type = 'provider'
         convo.escalated_at = timezone.now()

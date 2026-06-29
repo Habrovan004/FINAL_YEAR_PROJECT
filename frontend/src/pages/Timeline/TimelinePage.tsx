@@ -244,7 +244,7 @@ export default function TimelinePage() {
                       <Tooltip
                         contentStyle={tooltipStyle}
                         cursor={{ stroke: accentSoft, strokeWidth: 1 }}
-                        formatter={(v: number) => [t(moodKeyFor(v)), t('status')]}
+                        formatter={(v) => [t(moodKeyFor(Number(v) || 3)), t('status')]}
                       />
                       <Area
                         type="monotone"
@@ -291,7 +291,7 @@ export default function TimelinePage() {
                       <Tooltip
                         contentStyle={tooltipStyle}
                         cursor={{ stroke: '#3b82f6', strokeOpacity: 0.25, strokeWidth: 1 }}
-                        formatter={(v: number) => [`${v} kg`, t('weight_label')]}
+                        formatter={(v) => [`${v ?? 0} kg`, t('weight_label')]}
                       />
                       <Area
                         type="monotone"
@@ -332,7 +332,7 @@ export default function TimelinePage() {
                       <Tooltip
                         contentStyle={tooltipStyle}
                         cursor={{ fill: accentSoft }}
-                        formatter={(v: number) => [v, t('logs_count')]}
+                        formatter={(v) => [String(v ?? 0), t('logs_count')]}
                       />
                       <Bar dataKey="count" fill="var(--accent)" radius={[8, 8, 0, 0]} />
                     </BarChart>

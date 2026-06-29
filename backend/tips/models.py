@@ -33,6 +33,10 @@ class Tip(models.Model):
     is_ai_generated = models.BooleanField(default=False)
     is_reviewed = models.BooleanField(default=False, help_text="Checked by medical professional")
 
+    # Approval gate — patients only see articles where is_approved=True.
+    # Managers/admins flip this from the dashboard.
+    is_approved = models.BooleanField(default=False, help_text="Approved for mothers to see")
+
     class Meta:
         ordering = ['order']
 

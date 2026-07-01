@@ -54,6 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (formData: any) => {
     const { data } = await api.post('/auth/register/', formData)
+    if (data.access) localStorage.setItem('access_token', data.access)
+    if (data.refresh) localStorage.setItem('refresh_token', data.refresh)
     setUser(data.user)
   }
 
@@ -67,7 +69,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    localStorage.clear()
+    const refresh = localStorage.getItem('refresh_token')
+    if (refresh) {
+      // Best-effort — blacklist the token server-side so it can't be reused
+      api.post('/auth/logout/', { refresh }).catch(() => {})
+    }
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
     setUser(null)
   }
 

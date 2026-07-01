@@ -64,37 +64,7 @@ class SymptomReport(models.Model):
         return f"Report from {self.patient.full_name} - {self.risk_level.upper()}"
 
     def evaluate_risk(self):
-        """
-        Module 3: Clinical Decision Support Engine
-        Evaluates combinations of symptoms against medical rules.
-        """
-        symptom_names = [s.name.lower() for s in self.symptoms.all()]
-        danger_count = self.symptoms.filter(is_danger_sign=True).count()
-        
-        # High Risk Rules (Immediate Alert)
-        high_risk_triggers = [
-            'severe headache', 'blurred vision', 'bleeding', 'reduced fetal movement',
-            'convulsions', 'fever', 'abdominal pain'
-        ]
-        
-        # 1. Any specific High Risk symptom or more than 2 danger signs
-        is_high = any(trigger in symptom_names for trigger in high_risk_triggers) or danger_count >= 2
-        
-        if is_high:
-            self.risk_level = 'high'
-            self.clinical_recommendation = "URGENT: Please proceed to the nearest medical facility immediately. Your healthcare provider has been alerted."
-            # Here we would trigger the SMS/Provider Alert
-            return
-            
-        # 2. Medium Risk Rules (Provider Notification)
-        medium_risk_triggers = ['swelling', 'nausea', 'dizziness', 'anxiety']
-        is_medium = any(trigger in symptom_names for trigger in medium_risk_triggers) or danger_count == 1
-        
-        if is_medium:
-            self.risk_level = 'medium'
-            self.clinical_recommendation = "CAUTION: Your symptoms require a follow-up. A healthcare provider will contact you shortly for a routine review."
-            return
-
-        # 3. Low Risk (Self-care Guidance)
-        self.risk_level = 'low'
-        self.clinical_recommendation = "CONTINUE CARE: Your symptoms appear normal for your stage. Stay hydrated and rest. If symptoms worsen, please report again."
+        from tracking.utils import assess_clinical_risk
+        risk, recommendation, _ = assess_clinical_risk(self.symptoms.all())
+        self.risk_level = risk
+        self.clinical_recommendation = recommendation

@@ -30,7 +30,7 @@ class PatientProfile(models.Model):
     
     is_first_pregnancy = models.BooleanField(default=True)
     previous_pregnancies = models.IntegerField(default=0, validators=[MinValueValidator(0)])
-    previous_complications = models.JSONField(default=lambda: [], blank=True)
+    previous_complications = models.JSONField(default=list, blank=True)
 
     hospital = models.ForeignKey('hospitals.Hospital', on_delete=models.SET_NULL, null=True, blank=True)
     partner_phone = models.CharField(max_length=20, blank=True)
@@ -53,11 +53,12 @@ class PatientProfile(models.Model):
         return 0
 
     def trimester(self):
+        if self.pregnancy_status != 'pregnant':
+            return 'Not Pregnant'
         week = self.pregnancy_week()
         if week <= 12: return '1st'
         elif week <= 26: return '2nd'
-        elif week > 26: return '3rd'
-        return 'Not Pregnant'
+        return '3rd'
 
     def __str__(self):
         return f"Profile of user #{self.user_id}"
@@ -69,18 +70,29 @@ class BabyGrowth(models.Model):
     week = models.IntegerField(unique=True, help_text="Week of pregnancy")
     title = models.CharField(max_length=200)
     title_sw = models.CharField(max_length=200, blank=True)
-    
+
     # Detailed development info
     description = models.TextField()
     description_sw = models.TextField(blank=True)
     organ_formation = models.TextField(blank=True, help_text="Major organs forming this week")
-    
+
     size_comparison = models.CharField(max_length=100, blank=True, help_text="e.g., 'A blueberry'")
     size_comparison_sw = models.CharField(max_length=100, blank=True)
-    
+
     length_cm = models.FloatField(null=True, blank=True)
     weight_g = models.FloatField(null=True, blank=True)
-    
+
+    # Emoji shown in the BabyGrowthPage hero — kept on the row so backend can
+    # change visual representation without a frontend release.
+    emoji = models.CharField(max_length=8, blank=True)
+
+    # Bilingual bullet lists rendered on the BabyGrowthPage. JSONField holds an
+    # ordered array of short strings.
+    baby_facts = models.JSONField(default=list, blank=True)
+    baby_facts_sw = models.JSONField(default=list, blank=True)
+    mother_feels = models.JSONField(default=list, blank=True)
+    mother_feels_sw = models.JSONField(default=list, blank=True)
+
     image = models.ImageField(upload_to='baby_growth_images/', blank=True, null=True)
 
     class Meta:
@@ -89,6 +101,13 @@ class BabyGrowth(models.Model):
 
     def __str__(self):
         return f"Week {self.week}: {self.title}"
+
+    def trimester(self):
+        if self.week <= 12:
+            return '1st'
+        if self.week <= 26:
+            return '2nd'
+        return '3rd'
 
 class ANCMilestone(models.Model):
     objects = models.Manager()

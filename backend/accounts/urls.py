@@ -4,11 +4,9 @@ from . import manager_views
 
 urlpatterns = [
     path('register/', views.register, name='register'),
-    path('password-reset/request/', views.request_password_reset, name='password-reset-request'),
-    path('password-reset/confirm/', views.confirm_password_reset, name='password-reset-confirm'),
-    path('send-otp/', views.send_otp, name='send_otp'),
-    path('verify-otp/', views.verify_otp, name='verify_otp'),
+    path('password-reset/', views.reset_password, name='password-reset'),
     path('login/', views.login, name='login'),
+    path('logout/', views.logout, name='logout'),
     path('me/', views.me, name='me'),
     path('partner/invite/', views.partner_link, name='partner-invite'),
     path('partner/accept/', views.accept_invitation, name='partner-accept'),

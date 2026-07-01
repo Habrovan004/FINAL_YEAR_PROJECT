@@ -7,55 +7,18 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from .serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer,
-    VerifyOTPSerializer, PartnerLinkSerializer
+    RegisterSerializer, LoginSerializer, UserSerializer, PartnerLinkSerializer
 )
-from .models import User, OTPCode, PartnerLink
-from .throttles import OTPRequestThrottle, PasswordResetThrottle
+from .models import User, PartnerLink
+from .throttles import PasswordResetThrottle, RegisterThrottle
 from appointments.models import Appointment
 from tracking.models import SymptomReport
 from emergency.models import EmergencyLog
 from medication.models import MedicationReminder
 from clinical.models import ANCVisit
-from .sms import send_otp_sms
-from .email_otp import send_otp_email
-
-
-def _deliver_otp(user, code, channel: str, purpose: str = 'verification') -> str:
-    """Send the OTP via 'sms' or 'email'. Returns the channel actually used.
-
-    Falls back to the alternate channel if the requested one fails or is unavailable.
-    """
-    requested = (channel or 'sms').lower()
-
-    def try_email():
-        if not user.email:
-            return False
-        try:
-            send_otp_email(user.email, code, purpose=purpose)
-            return True
-        except Exception as e:
-            print(f"[OTP] Email delivery failed for {user.email}: {e}")
-            return False
-
-    def try_sms():
-        try:
-            send_otp_sms(user.phone_number, code)
-            return True
-        except Exception as e:
-            print(f"[OTP] SMS delivery failed for {user.phone_number}: {e}")
-            return False
-
-    if requested == 'email':
-        if try_email():
-            return 'email'
-        return 'sms' if try_sms() else 'none'
-
-    if try_sms():
-        return 'sms'
-    return 'email' if try_email() else 'none'
 
 
 def generate_invitation_code():
@@ -68,156 +31,46 @@ def generate_invitation_code():
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([OTPRequestThrottle])
-def send_otp(request):
-    """Resend OTP code via SMS or email.
-
-    Body: { phone_number, channel: 'sms' | 'email' (default 'sms') }
-    """
-    phone_number = request.data.get('phone_number')
-    channel = (request.data.get('channel') or 'sms').lower()
-    if not phone_number:
-        return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        user = User.objects.get(phone_number=phone_number)
-        if channel == 'email' and not user.email:
-            return Response({'error': 'No email address on file for this account.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        otp = OTPCode.generate_for_user(user)
-        used_channel = _deliver_otp(user, otp.code, channel)
-
-        # Always print the code in the dev terminal
-        print(f"\n******************************************")
-        print(f"VERIFICATION CODE FOR {user.phone_number}: {otp.code}  (via {used_channel})")
-        print(f"******************************************\n")
-
-        return Response({
-            'message': f'OTP code sent via {used_channel}.',
-            'channel': used_channel,
-        }, status=status.HTTP_200_OK)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        print(f"OTP send failed: {e}")
-        return Response({'error': 'Could not send OTP.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
 @throttle_classes([PasswordResetThrottle])
-def request_password_reset(request):
-    """Generate and send a password reset OTP via SMS or email.
-
-    Body: { phone_number, channel: 'sms' | 'email' (default 'sms') }
-    """
+def reset_password(request):
+    """Reset password by phone number — no OTP required."""
     phone_number = request.data.get('phone_number')
-    channel = (request.data.get('channel') or 'sms').lower()
-    if not phone_number:
-        return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        user = User.objects.get(phone_number=phone_number)
-        if channel == 'email' and not user.email:
-            return Response({'error': 'No email address on file for this account.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        otp = OTPCode.generate_for_user(user)
-        used_channel = _deliver_otp(user, otp.code, channel, purpose='password_reset')
-
-        print(f"\n******************************************")
-        print(f"PASSWORD RESET CODE FOR {user.phone_number}: {otp.code}  (via {used_channel})")
-        print(f"******************************************\n")
-
-        return Response({
-            'message': f'Password reset code sent via {used_channel}.',
-            'channel': used_channel,
-        }, status=status.HTTP_200_OK)
-    except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-@throttle_classes([PasswordResetThrottle])
-def confirm_password_reset(request):
-    """Confirm OTP and set a new password for the user."""
-    phone_number = request.data.get('phone_number')
-    code = request.data.get('code')
     new_password = request.data.get('new_password')
 
-    if not all([phone_number, code, new_password]):
-        return Response({'error': 'phone_number, code and new_password are required.'}, status=status.HTTP_400_BAD_REQUEST)
+    if not phone_number or not new_password:
+        return Response(
+            {'error': 'phone_number and new_password are required.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if len(new_password) < 6:
+        return Response(
+            {'error': 'Password must be at least 6 characters.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         user = User.objects.get(phone_number=phone_number)
-        otp = OTPCode.objects.filter(user=user, code=code, is_used=False).last()
-
-        if otp and not otp.is_expired():
-            otp.is_used = True
-            otp.save()
-            user.set_password(new_password)
-            user.save()
-            return Response({'message': 'Password reset successful.'}, status=status.HTTP_200_OK)
-        return Response({'error': 'Invalid or expired code.'}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save()
+        return Response({'message': 'Password reset successful.'}, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([RegisterThrottle])
 def register(request):
     serializer = RegisterSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()
-        otp = OTPCode.generate_for_user(user)
-
-        # Honour preferred channel if provided; default to SMS but fall back to email
-        channel = (request.data.get('verification_channel') or 'sms').lower()
-        used_channel = _deliver_otp(user, otp.code, channel)
-
-        print(f"\n******************************************")
-        print(f"VERIFICATION CODE FOR {user.phone_number}: {otp.code}  (via {used_channel})")
-        print(f"******************************************\n")
-
+        tokens = RefreshToken.for_user(user)
         return Response({
-            'message': f'Account created. Verification code sent via {used_channel}.',
+            'message': 'Account created successfully.',
             'user': UserSerializer(user).data,
-            'channel': used_channel,
+            'access': str(tokens.access_token),
+            'refresh': str(tokens),
         }, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def verify_otp(request):
-    serializer = VerifyOTPSerializer(data=request.data)
-    if serializer.is_valid():
-        phone_number = serializer.validated_data['phone_number']
-        code = serializer.validated_data['code']
-        try:
-            user = User.objects.get(phone_number=phone_number)
-            otp = OTPCode.objects.filter(user=user, code=code, is_used=False).last()
-
-            if otp and not otp.is_expired():
-                otp.is_used = True
-                otp.save()
-                user.is_verified = True
-                user.save()
-
-                tokens = RefreshToken.for_user(user)
-                return Response({
-                    'message': 'Verified successfully.',
-                    'access': str(tokens.access_token),
-                    'refresh': str(tokens),
-                    'user': UserSerializer(user).data,
-                    'redirect_to': user.user_type
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        except User.DoesNotExist:
-            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
-
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -236,6 +89,20 @@ def login(request):
 
         return Response(response_data, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    """Blacklist the refresh token so it cannot be reused after logout."""
+    refresh_token = request.data.get('refresh')
+    if not refresh_token:
+        return Response({'error': 'Refresh token required.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        RefreshToken(refresh_token).blacklist()
+    except TokenError:
+        pass  # Already invalid — still proceed with logout
+    return Response({'message': 'Logged out successfully.'}, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])

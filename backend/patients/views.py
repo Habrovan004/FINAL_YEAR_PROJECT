@@ -17,6 +17,7 @@ from datetime import date
 import random
 import json
 from .utils import assign_provider_to_mother
+from chat.models import Message
 
 @api_view(['GET', 'PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
@@ -122,7 +123,14 @@ def dashboard(request):
 
     trimester_val = profile.trimester()[0] if profile.trimester() != 'Not Pregnant' else 'all'
     tips = Tip.objects.filter(Q(trimester=trimester_val) | Q(trimester='all'), is_daily=True)
-    daily_tip = random.choice(tips) if tips.exists() else None
+    # Same tip for the same user on the same day — stable across refreshes
+    rng = random.Random(f"{request.user.id}-{date.today().isoformat()}")
+    daily_tip = rng.choice(list(tips)) if tips.exists() else None
+
+    unread_count = Message.objects.filter(
+        room__patient=request.user,
+        is_read=False,
+    ).exclude(sender=request.user).count()
 
     return Response({
         'user_name': request.user.full_name,
@@ -133,7 +141,7 @@ def dashboard(request):
         },
         'baby_growth': BabyGrowthSerializer(growth).data if growth else None,
         'daily_tip': TipSerializer(daily_tip).data if daily_tip else None,
-        'notifications_count': 0
+        'notifications_count': unread_count,
     })
 
 
@@ -144,6 +152,37 @@ def skip_onboarding(request):
     profile.onboarding_completed = True
     profile.save()
     return Response(PatientProfileSerializer(profile).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def baby_growth(request):
+    """
+    Returns baby-growth data. Without `?week=`, returns every seeded week so the
+    BabyGrowthPage can power its slider client-side. With `?week=N`, returns the
+    single closest-week row plus the requested week echoed back, so callers can
+    tell when they got an approximation vs an exact match.
+    """
+    week_param = request.query_params.get('week')
+    rows = BabyGrowth.objects.all().order_by('week')
+
+    if week_param is None:
+        return Response(BabyGrowthSerializer(rows, many=True).data)
+
+    try:
+        requested = int(week_param)
+    except (TypeError, ValueError):
+        return Response({'error': 'week must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not rows.exists():
+        return Response({'requested_week': requested, 'match': None})
+
+    closest = min(rows, key=lambda r: abs(r.week - requested))
+    return Response({
+        'requested_week': requested,
+        'match': BabyGrowthSerializer(closest).data,
+        'is_exact': closest.week == requested,
+    })
 
 
 def _summarize_patient(profile: PatientProfile) -> dict:
@@ -184,6 +223,8 @@ def patient_list(request):
       ?risk=low|medium|high
       ?min_week=<int>
       ?max_week=<int>
+
+    Uses 3 DB queries total regardless of patient count (was 2N+1).
     """
     if request.user.user_type != 'provider':
         return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
@@ -192,8 +233,12 @@ def patient_list(request):
     if not provider_profile:
         return Response({'error': 'Provider profile not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    qs = PatientProfile.objects.filter(assigned_provider=provider_profile).select_related('user', 'hospital')
-
+    # Query 1: all profiles for this provider (text search applied at DB level)
+    qs = (
+        PatientProfile.objects
+        .filter(assigned_provider=provider_profile)
+        .select_related('user', 'hospital', 'assigned_provider__user')
+    )
     search = (request.query_params.get('search') or '').strip()
     if search:
         qs = qs.filter(
@@ -201,24 +246,77 @@ def patient_list(request):
             | Q(user__phone_number__icontains=search)
         )
 
-    summaries = [_summarize_patient(p) for p in qs]
+    profiles = list(qs)
+    if not profiles:
+        return Response([])
 
+    patient_ids = [p.user_id for p in profiles]
+
+    # Query 2: latest ANC visit per patient — order newest-first, deduplicate in Python
+    latest_visits: dict = {}
+    for v in (
+        ANCVisit.objects
+        .filter(patient_id__in=patient_ids)
+        .order_by('-visit_date')
+        .values('patient_id', 'risk_level', 'visit_date')
+    ):
+        if v['patient_id'] not in latest_visits:
+            latest_visits[v['patient_id']] = v
+
+    # Query 3: latest symptom report per patient
+    latest_symptoms: dict = {}
+    for r in (
+        SymptomReport.objects
+        .filter(patient_id__in=patient_ids)
+        .order_by('-created_at')
+        .values('patient_id', 'risk_level')
+    ):
+        if r['patient_id'] not in latest_symptoms:
+            latest_symptoms[r['patient_id']] = r
+
+    RISK_RANK = {'low': 0, 'medium': 1, 'high': 2}
+
+    summaries = []
+    for p in profiles:
+        uid = p.user_id
+        lv = latest_visits.get(uid)
+        ls = latest_symptoms.get(uid)
+        effective_risk = max(
+            lv['risk_level'] if lv else 'low',
+            ls['risk_level'] if ls else 'low',
+            key=lambda r: RISK_RANK.get(r, 0),
+        )
+        summaries.append({
+            'id': uid,
+            'full_name': p.user.full_name,
+            'phone_number': p.user.phone_number,
+            'date_of_birth': p.user.date_of_birth,
+            'pregnancy_status': p.pregnancy_status,
+            'gestational_age_weeks': p.pregnancy_week(),
+            'trimester': p.trimester(),
+            'lmp_date': p.lmp_date,
+            'due_date': p.due_date,
+            'hospital': p.hospital.name if p.hospital else None,
+            'assigned_provider': p.assigned_provider.user.full_name if p.assigned_provider else None,
+            'last_visit_date': lv['visit_date'] if lv else None,
+            'risk_level': effective_risk,
+        })
+
+    # Apply risk and gestational-age filters (data already in memory — no extra queries)
     risk = request.query_params.get('risk')
     if risk in ('low', 'medium', 'high'):
         summaries = [s for s in summaries if s['risk_level'] == risk]
 
     min_week = request.query_params.get('min_week')
     max_week = request.query_params.get('max_week')
-    if min_week is not None and min_week != '':
+    if min_week:
         try:
-            mw = int(min_week)
-            summaries = [s for s in summaries if (s['gestational_age_weeks'] or 0) >= mw]
+            summaries = [s for s in summaries if (s['gestational_age_weeks'] or 0) >= int(min_week)]
         except ValueError:
             pass
-    if max_week is not None and max_week != '':
+    if max_week:
         try:
-            xw = int(max_week)
-            summaries = [s for s in summaries if (s['gestational_age_weeks'] or 0) <= xw]
+            summaries = [s for s in summaries if (s['gestational_age_weeks'] or 0) <= int(max_week)]
         except ValueError:
             pass
 

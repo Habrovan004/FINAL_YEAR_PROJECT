@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Search, Map as MapIcon, List, Loader2, CheckCircle2, MapPin, Calendar, Plus, Minus, Info, AlertCircle, HeartPulse, Bell, Volume2, Type, Phone, Mail } from 'lucide-react'
+import { ArrowLeft, Search, Map as MapIcon, List, Loader2, CheckCircle2, MapPin, Calendar, Plus, Minus, Info, AlertCircle, HeartPulse, Bell, Volume2, Type } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import api from '../../api/client'
@@ -19,7 +20,7 @@ const DefaultIcon = L.icon({
 })
 L.Marker.prototype.options.icon = DefaultIcon
 
-const TOTAL_STEPS = 8
+const TOTAL_STEPS = 7
 
 interface Hospital {
   id: number; name: string; type: string; phone: string; address: string;
@@ -41,7 +42,6 @@ interface FormData {
   weight_kg: string; height_cm: string; initial_symptoms: SymptomEntry[]
   hospital: string; language: string
   notifications_enabled: boolean; audio_guidance: boolean; font_size: 'small' | 'medium' | 'large'
-  verification_method: 'sms' | 'email'
 }
 
 type FormDataValue = string | number | boolean | string[] | SymptomEntry[];
@@ -70,6 +70,7 @@ interface AxiosError {
 export default function OnboardingFlow() {
   const nav = useNavigate()
   const { i18n, t } = useTranslation()
+  const { setUser } = useAuth()
   const [step, setStep] = useState(1)
   const [form, setForm] = useState<FormData>({
     full_name: '', date_of_birth: '', phone_number: '', password: '',
@@ -79,7 +80,6 @@ export default function OnboardingFlow() {
     weight_kg: '', height_cm: '', initial_symptoms: [],
     hospital: '', language: i18n.language,
     notifications_enabled: true, audio_guidance: false, font_size: 'medium',
-    verification_method: 'sms'
   })
 
   const [loading, setLoading] = useState(false)
@@ -162,11 +162,10 @@ export default function OnboardingFlow() {
   const handleFinish = async () => {
     setLoading(true)
     try {
-      // Validate core account fields before sending
       if (!form.phone_number || !form.full_name || !form.password) {
-         setStep(1);
-         alert("Please complete your account details first.");
-         return;
+        setStep(1)
+        alert('Please complete your account details first.')
+        return
       }
 
       const payload: any = {
@@ -176,7 +175,6 @@ export default function OnboardingFlow() {
         date_of_birth: form.date_of_birth || null,
         password: form.password,
         user_type: form.user_type,
-        verification_channel: form.verification_method,
       }
       if (form.user_type !== 'patient') {
         payload.hospital_id = form.hospital ? parseInt(form.hospital) : null
@@ -184,38 +182,63 @@ export default function OnboardingFlow() {
       if (form.user_type === 'provider') {
         payload.specialization = form.specialization
       }
-      const { data: regData } = await api.post('/auth/register/', payload)
 
-      localStorage.setItem('pending_phone', form.phone_number)
+      const { data: regData } = await api.post('/auth/register/', payload)
+      localStorage.setItem('access_token', regData.access)
+      localStorage.setItem('refresh_token', regData.refresh)
+
+      let finalUser = regData.user
+
       if (form.user_type === 'patient') {
-        localStorage.setItem('onboarding_data', JSON.stringify({ ...form, language: i18n.language }))
-      } else {
-        localStorage.removeItem('onboarding_data')
+        try {
+          const { data: onboardData } = await api.post('/patients/complete-onboarding/', {
+            pregnancy_status: form.pregnancy_status,
+            lmp_date: form.lmp_date || null,
+            due_date: form.due_date || null,
+            is_first_pregnancy: form.is_first_pregnancy,
+            previous_pregnancies: form.previous_pregnancies,
+            previous_complications: form.previous_complications,
+            weight_kg: form.weight_kg ? parseFloat(form.weight_kg) : null,
+            height_cm: form.height_cm ? parseFloat(form.height_cm) : null,
+            initial_symptoms: form.initial_symptoms,
+            hospital_id: form.hospital ? parseInt(form.hospital) : null,
+            language: i18n.language,
+            notifications_enabled: form.notifications_enabled,
+            audio_guidance: form.audio_guidance,
+            font_size: form.font_size,
+          })
+          finalUser = onboardData
+        } catch {
+          // Non-fatal — profile visible in settings
+        }
       }
-      nav('/onboarding/verify', {
-        state: {
-          phoneNumber: form.phone_number,
-          channel: regData.channel || form.verification_method,
-          email: form.email || null,
-        },
-      })
+
+      setUser(finalUser)
+
+      if (form.user_type === 'provider') {
+        nav('/provider/dashboard')
+      } else if (form.user_type === 'hospital_manager') {
+        nav('/manager/dashboard')
+      } else {
+        nav('/home')
+      }
     } catch (err) {
       const axiosErr = err as AxiosError
       const data = axiosErr.response?.data
       let msg = 'Error completing setup'
-      
       if (data) {
         if (data.phone_number) msg = `Phone number: ${data.phone_number[0]}`
         else if (data.error) msg = data.error
         else if (typeof data === 'string') msg = data.slice(0, 100)
         else {
-          // Flatten first validation error
           const firstKey = Object.keys(data)[0]
           if (Array.isArray(data[firstKey])) msg = `${firstKey}: ${data[firstKey][0]}`
         }
       }
       alert(msg)
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
   }
 
   const next = () => {
@@ -261,10 +284,6 @@ export default function OnboardingFlow() {
     }
 
     if (step === TOTAL_STEPS) {
-      if (form.verification_method === 'email' && !form.email.trim()) {
-        alert(t('email_required_for_verification'))
-        return
-      }
       void handleFinish()
       return
     }
@@ -483,64 +502,6 @@ export default function OnboardingFlow() {
               </>
           )}
 
-          {step === 8 && (
-            <>
-              <div className="ob-titles">
-                <span className="ob-eyebrow">{t('verification')}</span>
-                <h2 className="ob-title">{t('choose_verification_method')}</h2>
-                <p className="ob-subtitle">{t('choose_verification_sub')}</p>
-              </div>
-              <div className="ob-options" role="radiogroup" aria-label={t('choose_verification_method')}>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={form.verification_method === 'sms'}
-                  onClick={() => update('verification_method', 'sms')}
-                  className={`ob-option ob-method ${form.verification_method === 'sms' ? 'active' : ''}`}
-                >
-                  <div className="ob-method-icon"><Phone size={20} /></div>
-                  <div className="ob-method-body">
-                    <p className="ob-option-title">{t('verify_via_sms')}</p>
-                    <p className="ob-option-sub">
-                      {t('verify_via_sms_sub')}
-                      {form.phone_number ? <> · <strong>{form.phone_number}</strong></> : null}
-                    </p>
-                  </div>
-                  <div className={`ob-method-check ${form.verification_method === 'sms' ? 'on' : ''}`}>
-                    {form.verification_method === 'sms' && <CheckCircle2 size={18} />}
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={form.verification_method === 'email'}
-                  onClick={() => update('verification_method', 'email')}
-                  className={`ob-option ob-method ${form.verification_method === 'email' ? 'active' : ''}`}
-                >
-                  <div className="ob-method-icon"><Mail size={20} /></div>
-                  <div className="ob-method-body">
-                    <p className="ob-option-title">{t('verify_via_email')}</p>
-                    <p className="ob-option-sub">
-                      {t('verify_via_email_sub')}
-                      {form.email ? <> · <strong>{form.email}</strong></> : null}
-                    </p>
-                  </div>
-                  <div className={`ob-method-check ${form.verification_method === 'email' ? 'on' : ''}`}>
-                    {form.verification_method === 'email' && <CheckCircle2 size={18} />}
-                  </div>
-                </button>
-
-                {form.verification_method === 'email' && !form.email.trim() && (
-                  <div className="ob-method-warning" role="alert">
-                    <AlertCircle size={14} />
-                    <span>{t('email_required_for_verification')}</span>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
           <div className="ob-cta">
             <button
               className="btn-primary"
@@ -549,8 +510,7 @@ export default function OnboardingFlow() {
                 loading ||
                 !isWeightValid ||
                 !isHeightValid ||
-                (step === 6 && !form.hospital) ||
-                (step === TOTAL_STEPS && form.verification_method === 'email' && !form.email.trim())
+                (step === 6 && !form.hospital)
               }
             >
               {loading ? <Loader2 className="ob-spin" size={18} /> : t('continue')}

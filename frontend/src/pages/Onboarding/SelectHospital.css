@@ -238,6 +238,15 @@
   color: #fac775;
 }
 
+.sh-badge-maternity {
+  background: color-mix(in srgb, #7C3AED 18%, var(--bg-card));
+  color: #7C3AED;
+}
+
+[data-theme='dark'] .sh-badge-maternity {
+  color: #c4b5fd;
+}
+
 .sh-dist {
   font-size: 11px;
   color: var(--text-tertiary);

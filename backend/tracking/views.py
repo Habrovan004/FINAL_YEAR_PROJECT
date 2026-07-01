@@ -67,7 +67,7 @@ def submit_symptom_report(request):
         return Response({'error': 'No symptoms selected.'}, status=400)
     
     selected_symptoms = Symptom.objects.filter(id__in=symptom_ids)
-    risk_level, recommendation = assess_clinical_risk(selected_symptoms)
+    risk_level, recommendation, _ = assess_clinical_risk(selected_symptoms)
     
     report = SymptomReport.objects.create(
         patient=request.user,
@@ -75,12 +75,10 @@ def submit_symptom_report(request):
         risk_level=risk_level,
         clinical_recommendation=recommendation
     )
+    # High-risk SMS to mother + assigned provider is dispatched by the
+    # m2m_changed signal on SymptomReport.symptoms (see tracking/signals.py).
     report.symptoms.set(selected_symptoms)
-    
-    if risk_level == 'high':
-        # logic for provider notification
-        pass
-        
+
     return Response({
         'id': report.id,
         'risk_level': risk_level,

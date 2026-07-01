@@ -48,6 +48,8 @@ class RegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'hospital_id': 'Hospital not found.'})
 
         user = User.objects.create_user(**validated_data)
+        user.is_verified = True
+        user.save(update_fields=['is_verified'])
 
         if user.user_type == 'patient':
             # Auto-assign least-loaded provider at chosen facility
@@ -91,9 +93,6 @@ class LoginSerializer(serializers.Serializer):
         user = authenticate(username=data['phone_number'], password=data['password'])
         if not user:
             raise serializers.ValidationError('Invalid phone number or password.')
-
-        if not user.is_verified:
-            raise serializers.ValidationError('Account not verified.')
 
         tokens = RefreshToken.for_user(user)
         user_data = UserSerializer(user).data

@@ -52,6 +52,33 @@ The mother-facing chat is powered by Google Gemini (default model
 returns a clearly-marked "service unavailable" reply instead of a fake answer.
 Status probe: `GET /api/chatbot/status/` → `{ai_available, model}`.
 
+### Scheduled background jobs
+Appointment SMS reminders, "mark missed" sweeps, and medication-dose SMS
+reminders are all packaged as management commands. Run the omnibus command
+every 15–30 minutes from Windows Task Scheduler, cron, or Celery Beat:
+
+```bash
+python manage.py run_scheduled_tasks
+```
+
+Individual commands are also available:
+- `send_appointment_reminders [--hours] [--mark-missed]`
+- `send_medication_reminders`
+
+All commands are idempotent — re-running won't double-send.
+
+#### Windows Task Scheduler
+Action → Start a program  
+Program: `python`  
+Arguments: `manage.py run_scheduled_tasks`  
+Start in: absolute path to `backend/`  
+Trigger: every 15 minutes.
+
+#### cron (Linux/macOS)
+```cron
+*/15 * * * * cd /path/to/backend && /path/to/venv/bin/python manage.py run_scheduled_tasks
+```
+
 ---
 
 ## 🌐 Frontend Setup (React)
@@ -88,6 +115,10 @@ App runs at: **http://localhost:5173**
 | GET | `/api/tips/saved/` | Saved tips |
 | POST | `/api/emergency/log/` | Log emergency action |
 | POST | `/api/patients/skip-onboarding/` | Skip hospital selection |
+| GET | `/api/patients/baby-growth/` | Baby growth (all weeks, or `?week=N` for closest match) |
+| GET/POST | `/api/chat/rooms/` | Direct provider↔patient chat rooms |
+| GET/POST | `/api/chat/rooms/<id>/messages/` | Chat messages |
+| POST | `/api/chat/rooms/<id>/mark-read/` | Mark messages read |
 
 ---
 

@@ -26,10 +26,25 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     def get_is_onboarded(self, obj):
         return obj.onboarding_completed
 
+    def validate_previous_complications(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Must be a list.")
+        for item in value:
+            if not isinstance(item, str):
+                raise serializers.ValidationError("Each entry must be a string.")
+            if len(item) > 200:
+                raise serializers.ValidationError("Each entry must be 200 characters or fewer.")
+        return value
+
 class BabyGrowthSerializer(serializers.ModelSerializer):
+    trimester = serializers.SerializerMethodField()
+
     class Meta:
         model = BabyGrowth
         fields = '__all__'
+
+    def get_trimester(self, obj):
+        return obj.trimester()
 
 class ANCMilestoneSerializer(serializers.ModelSerializer):
     class Meta:

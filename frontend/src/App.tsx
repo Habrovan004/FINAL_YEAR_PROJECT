@@ -11,10 +11,8 @@ import 'leaflet/dist/leaflet.css'
 import Splash from './pages/Onboarding/Splash'
 import Login from './pages/Onboarding/Login'
 import OnboardingFlow from './pages/Onboarding/OnboardingFlow'
-import VerifyOTP from './pages/Onboarding/VerifyOTP'
 import SelectHospital from './pages/Onboarding/SelectHospital'
 import PasswordResetRequest from './pages/Onboarding/PasswordResetRequest.tsx'
-import PasswordResetConfirm from './pages/Onboarding/PasswordResetConfirm.tsx'
 import HomePage from './pages/Home/HomePage'
 import BabyGrowthPage from './pages/Home/BabyGrowthPage'
 import TrackPage from './pages/Track/TrackPage'
@@ -49,7 +47,6 @@ function PrivateRoute({ children, allow }: { children: React.ReactNode; allow?: 
   const { user, isLoading } = useAuth()
   if (isLoading) return <Spinner />
   if (!user) return <Navigate to="/" replace />
-  if (!user.is_verified) return <Navigate to="/onboarding/verify" replace />
   if (allow && !allow.includes(user.user_type)) {
     return <Navigate to={dashboardPathFor(user.user_type)} replace />
   }
@@ -60,7 +57,6 @@ function OnboardingRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
   if (isLoading) return <Spinner />
   if (!user) return <Navigate to="/" replace />
-  if (!user.is_verified) return <Navigate to="/onboarding/verify" replace />
   if (user.user_type !== 'patient') {
     return <Navigate to={dashboardPathFor(user.user_type)} replace />
   }
@@ -126,9 +122,7 @@ function App() {
                 <Route path="/" element={<Splash />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/password-reset/request" element={<PasswordResetRequest />} />
-                <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />
                 <Route path="/onboarding" element={<OnboardingFlow />} />
-                <Route path="/onboarding/verify" element={<VerifyOTP />} />
 
                 {/* ── Mother onboarding (hospital pick) ── */}
                 <Route

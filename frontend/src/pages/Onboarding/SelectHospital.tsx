@@ -10,25 +10,34 @@ import "./auth.css";
 import "./SelectHospital.css";
 
 // ── Types ──────────────────────────────────────────────────────────────────
+type HospitalType = "public" | "private" | "maternity";
+
 interface Hospital {
   id: number;
   name: string;
   address: string;
-  type: "public" | "private";
+  type: HospitalType;
   lat: number;
   lng: number;
-  distance_km: number;
+  distance_km: number | null;
 }
 
-// ── Mock data (replace with API call: GET /api/hospitals/?lat=...&lng=...) ──
-const MOCK_HOSPITALS: Hospital[] = [
-  { id: 1, name: "Mwananyamala Hospital",      address: "Bagamoyo Rd, Dar es Salaam",  type: "public",  lat: -6.7724, lng: 39.2383, distance_km: 1.2 },
-  { id: 2, name: "Sinza Hospital",              address: "Sinza, Dar es Salaam",         type: "public",  lat: -6.7824, lng: 39.2283, distance_km: 2.4 },
-  { id: 3, name: "CCBRT Hospital",              address: "Bagamoyo Rd, Dar es Salaam",  type: "private", lat: -6.7924, lng: 39.2483, distance_km: 3.1 },
-  { id: 4, name: "Marie Stopes Tanzania",       address: "Kinondoni Rd, Dar es Salaam", type: "private", lat: -6.8024, lng: 39.2183, distance_km: 3.8 },
-  { id: 5, name: "Muhimbili National Hospital", address: "Kalenga St, Dar es Salaam",   type: "public",  lat: -6.8124, lng: 39.2683, distance_km: 4.5 },
-  { id: 6, name: "Aga Khan Hospital",           address: "Ocean Rd, Dar es Salaam",     type: "private", lat: -6.8224, lng: 39.2783, distance_km: 5.2 },
-];
+// Backend (HospitalSerializer) exposes `latitude`/`longitude` and may compute
+// `distance_km` only when lat/lng query params are supplied. This shape is
+// kept narrow on purpose — extra fields from the API are ignored.
+interface HospitalApi {
+  id: number;
+  name: string;
+  address?: string | null;
+  type?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  distance_km?: number | null;
+}
+
+// Dar es Salaam centre — used as the map default when geolocation is unavailable
+// AND as the lat/lng we send to the API so distance_km is always populated.
+const FALLBACK_CENTRE = { lat: -6.7924, lng: 39.2083 };
 
 // ── Custom Leaflet marker icons (memoized for performance) ──────────────────
 const makeIcon = (color: string) =>
@@ -48,6 +57,34 @@ const makeIcon = (color: string) =>
 const selectedIcon = makeIcon("#D4537E");
 const publicIcon   = makeIcon("#1D9E75");
 const privateIcon  = makeIcon("#B45309");
+const maternityIcon = makeIcon("#7C3AED");
+
+const iconFor = (type: HospitalType, isSelected: boolean) => {
+  if (isSelected) return selectedIcon;
+  if (type === "private") return privateIcon;
+  if (type === "maternity") return maternityIcon;
+  return publicIcon;
+};
+
+const normalizeType = (raw?: string | null): HospitalType => {
+  const v = (raw || "").toLowerCase();
+  if (v === "private") return "private";
+  if (v === "maternity") return "maternity";
+  return "public";
+};
+
+const toHospital = (h: HospitalApi): Hospital | null => {
+  if (h.latitude == null || h.longitude == null) return null;
+  return {
+    id: h.id,
+    name: h.name,
+    address: h.address || "",
+    type: normalizeType(h.type),
+    lat: h.latitude,
+    lng: h.longitude,
+    distance_km: h.distance_km ?? null,
+  };
+};
 
 // ── Helper: pan map to selected hospital ──────────────────────────────────
 function MapPanner({ hospital }: { hospital: Hospital | null }) {
@@ -66,11 +103,8 @@ interface OptimizedMarkerProps {
 }
 
 const OptimizedMarker = memo(({ hospital: h, isSelected, onSelect }: OptimizedMarkerProps) => {
-  const icon = isSelected
-    ? selectedIcon
-    : h.type === "public"
-      ? publicIcon
-      : privateIcon;
+  const icon = iconFor(h.type, isSelected);
+  const badgeColor = h.type === "private" ? "#B45309" : h.type === "maternity" ? "#7C3AED" : "#1D9E75";
 
   return (
     <Marker
@@ -83,10 +117,8 @@ const OptimizedMarker = memo(({ hospital: h, isSelected, onSelect }: OptimizedMa
         <br />
         {h.address}
         <br />
-        <span style={{ color: h.type === "public" ? "#1D9E75" : "#B45309" }}>
-          {h.type}
-        </span>
-        {" "} · {h.distance_km} km
+        <span style={{ color: badgeColor }}>{h.type}</span>
+        {h.distance_km != null && <>{" "} · {h.distance_km} km</>}
       </Popup>
     </Marker>
   );
@@ -101,25 +133,68 @@ export default function SelectHospital() {
   const { t } = useTranslation();
 
   const [search, setSearch]       = useState("");
-  const [filter, setFilter]       = useState<"all" | "public" | "private">("all");
+  const [filter, setFilter]       = useState<"all" | HospitalType>("all");
   const [selected, setSelected]   = useState<Hospital | null>(null);
-  const hospitals: Hospital[] = MOCK_HOSPITALS;
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
+  const [fetching, setFetching]   = useState(true);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState("");
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [mapCentre, setMapCentre] = useState<[number, number]>([FALLBACK_CENTRE.lat, FALLBACK_CENTRE.lng]);
+
+  // Try to get the user's location once on mount; fall back to Dar es Salaam
+  // centre. Either way, we send a lat/lng to the API so distance_km comes back.
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchHospitals = (lat: number, lng: number) => {
+      api.get<HospitalApi[]>(`/hospitals/?lat=${lat}&lng=${lng}`)
+        .then((res) => {
+          if (cancelled) return;
+          const mapped = (res.data || [])
+            .map(toHospital)
+            .filter((h): h is Hospital => h !== null);
+          setHospitals(mapped);
+          if (mapped.length === 0) setError(t("no_facilities_found"));
+        })
+        .catch(() => {
+          if (!cancelled) setError(t("hospital_load_failed"));
+        })
+        .finally(() => {
+          if (!cancelled) setFetching(false);
+        });
+    };
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (cancelled) return;
+          setMapCentre([pos.coords.latitude, pos.coords.longitude]);
+          fetchHospitals(pos.coords.latitude, pos.coords.longitude);
+        },
+        () => fetchHospitals(FALLBACK_CENTRE.lat, FALLBACK_CENTRE.lng),
+        { timeout: 4000, maximumAge: 60_000 }
+      );
+    } else {
+      fetchHospitals(FALLBACK_CENTRE.lat, FALLBACK_CENTRE.lng);
+    }
+
+    return () => { cancelled = true; };
+  }, [t]);
 
   const handleSelectHospital = useCallback((h: Hospital) => {
     setSelected(h);
   }, []);
 
   const visible = useMemo(() => {
+    const term = search.toLowerCase();
     return [...hospitals]
-        .sort((a, b) => a.distance_km - b.distance_km)
+        .sort((a, b) => (a.distance_km ?? Infinity) - (b.distance_km ?? Infinity))
         .filter((h) => filter === "all" || h.type === filter)
         .filter(
             (h) =>
-                h.name.toLowerCase().includes(search.toLowerCase()) ||
-                h.address.toLowerCase().includes(search.toLowerCase())
+                h.name.toLowerCase().includes(term) ||
+                h.address.toLowerCase().includes(term)
         );
   }, [hospitals, filter, search]);
 
@@ -175,7 +250,7 @@ export default function SelectHospital() {
 
         <div className="sh-map-wrap">
           <MapContainer
-              center={[-6.7924, 39.2083]}
+              center={mapCentre}
               zoom={12}
               style={{ width: "100%", height: "100%" }}
               zoomControl={false}
@@ -208,7 +283,7 @@ export default function SelectHospital() {
           </div>
 
           <div className="sh-filter-row">
-            {(["all", "public", "private"] as const).map((f) => (
+            {(["all", "public", "private", "maternity"] as const).map((f) => (
                 <button
                     key={f}
                     className={`sh-chip${filter === f ? " sh-chip-active" : ""}`}
@@ -221,7 +296,9 @@ export default function SelectHospital() {
 
           <p className="sh-section-label">{t('nearest_to_you')}</p>
           <div className="sh-list">
-            {visible.length === 0 ? (
+            {fetching ? (
+                <p className="sh-empty">{t('loading_facilities')}</p>
+            ) : visible.length === 0 ? (
                 <p className="sh-empty">{t('no_facilities_found')}</p>
             ) : (
                  visible.map((h) => {
@@ -241,9 +318,11 @@ export default function SelectHospital() {
                           <p className="sh-card-addr">{h.address}</p>
                           <div className="sh-card-meta">
                             <span className={`sh-badge sh-badge-${h.type}`}>{h.type}</span>
-                            <span className="sh-dist">
-                              <MapPin size={10} /> {h.distance_km} km {t('away')}
-                            </span>
+                            {h.distance_km != null && (
+                              <span className="sh-dist">
+                                <MapPin size={10} /> {h.distance_km} km {t('away')}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className={`sh-check${isSel ? " sh-check-on" : ""}`}>

@@ -22,6 +22,8 @@ api.interceptors.response.use(
           // Use the same baseURL logic for refresh
           const { data } = await axios.post(`${import.meta.env.VITE_API_URL}/auth/token/refresh/`, { refresh })
           localStorage.setItem('access_token', data.access)
+          // Save the rotated refresh token so the next refresh doesn't fail
+          if (data.refresh) localStorage.setItem('refresh_token', data.refresh)
           err.config.headers.Authorization = `Bearer ${data.access}`
           return api.request(err.config)
         } catch {

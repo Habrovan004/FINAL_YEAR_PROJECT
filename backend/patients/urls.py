@@ -9,4 +9,5 @@ urlpatterns = [
     path('pregnancy-info/', views.pregnancy_info, name='pregnancy-info'),
     path('dashboard/', views.dashboard, name='dashboard'),
     path('skip-onboarding/', views.skip_onboarding, name='skip-onboarding'),
+    path('baby-growth/', views.baby_growth, name='baby-growth'),
 ]

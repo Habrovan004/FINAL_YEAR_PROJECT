@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react"
 import type { ReactNode } from 'react'
+import axios from 'axios'
 import api from '../api/client'
 import { setAccessToken } from '../api/tokenStore'
 
@@ -35,7 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // The access token only ever lives in memory, so a page reload loses it.
     // Recover a session by exchanging the httpOnly refresh cookie (if any).
-    api.post('/auth/token/refresh/', {})
+    // Must bypass `api`'s 401-retry interceptor: a visitor with no cookie
+    // yet is an expected 401 here, not a mid-session expiry — going through
+    // `api` would make the interceptor "retry" this exact call, also get
+    // 401, and force a redirect to '/', which remounts this effect and
+    // loops forever.
+    axios.post(
+      `${import.meta.env.VITE_API_URL}/auth/token/refresh/`, {}, { withCredentials: true }
+    )
         .then(r => {
           setAccessToken(r.data.access)
           return api.get('/auth/me/')

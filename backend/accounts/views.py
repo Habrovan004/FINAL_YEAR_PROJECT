@@ -14,7 +14,7 @@ from .serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer
 )
 from .models import User
-from .throttles import PasswordResetThrottle, RegisterThrottle
+from .throttles import LoginThrottle, PasswordResetThrottle, RegisterThrottle
 from appointments.models import Appointment
 from tracking.models import SymptomReport
 from emergency.models import EmergencyLog
@@ -108,6 +108,7 @@ def register(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([LoginThrottle])
 def login(request):
     serializer = LoginSerializer(data=request.data)
     if serializer.is_valid():

@@ -146,6 +146,22 @@ AUTH_COOKIE = 'refresh_token'
 AUTH_COOKIE_SAMESITE = 'Strict'
 AUTH_COOKIE_SECURE = config('AUTH_COOKIE_SECURE', default=not DEBUG, cast=bool)
 
+# ── Auth throttling ─────────────────────────────────────────────────────────
+# (requests, window_seconds) per scope. DRF's built-in rate strings only
+# support second/minute/hour/day windows, so login/password-reset use a
+# custom throttle (accounts.throttles.ConfigurableWindowThrottle) that reads
+# straight from this dict instead.
+AUTH_THROTTLE_RATES = {
+    'login': (
+        config('LOGIN_THROTTLE_LIMIT', default=5, cast=int),
+        config('LOGIN_THROTTLE_WINDOW_SECONDS', default=600, cast=int),
+    ),
+    'password_reset': (
+        config('PASSWORD_RESET_THROTTLE_LIMIT', default=5, cast=int),
+        config('PASSWORD_RESET_THROTTLE_WINDOW_SECONDS', default=600, cast=int),
+    ),
+}
+
 # ── AI (Google Gemini) ─────────────────────────────────────────────────────
 # Get a key at https://aistudio.google.com/app/apikey. The chat falls back to
 # a friendly "service unavailable" message if the key is missing or invalid.

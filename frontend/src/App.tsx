@@ -4,6 +4,7 @@ import { Languages, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AuthProvider, useAuth, dashboardPathFor } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
+import { TextSizeProvider, useTextSize } from './context/TextSizeContext'
 
 // Global styles
 import 'leaflet/dist/leaflet.css'
@@ -66,9 +67,11 @@ const ONBOARDING_PATH_PREFIXES = ['/onboarding', '/login', '/password-reset']
 
 function GlobalControls() {
   const { dark, toggle } = useTheme()
+  const { textSize, cycleTextSize } = useTextSize()
   const { i18n } = useTranslation()
   const location = useLocation()
   const activeLanguage = i18n.language?.startsWith('sw') ? 'sw' : 'en'
+  const sizeLabel = textSize === 'small' ? 'S' : textSize === 'large' ? 'L' : 'M'
 
   const isOnboarding =
     location.pathname === '/' ||
@@ -105,6 +108,15 @@ function GlobalControls() {
         <Languages size={15} />
         <span>{activeLanguage === 'sw' ? 'SW' : 'EN'}</span>
       </button>
+      <button
+        type="button"
+        className="global-language-btn"
+        onClick={cycleTextSize}
+        aria-label="Change text size"
+      >
+        <span>Aa</span>
+        <span>{sizeLabel}</span>
+      </button>
     </div>
   )
 }
@@ -113,50 +125,52 @@ function App() {
   return (
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
-          <AuthProvider>
-            <BrowserRouter>
-              <Routes>
-                {/* ── Public routes ── */}
-                <Route path="/" element={<Splash />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/password-reset/request" element={<PasswordResetRequest />} />
-                <Route path="/onboarding" element={<OnboardingFlow />} />
+          <TextSizeProvider>
+            <AuthProvider>
+              <BrowserRouter>
+                <Routes>
+                  {/* ── Public routes ── */}
+                  <Route path="/" element={<Splash />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/password-reset/request" element={<PasswordResetRequest />} />
+                  <Route path="/onboarding" element={<OnboardingFlow />} />
 
-                {/* ── Mother onboarding (hospital pick) ── */}
-                <Route
-                    path="/onboarding/hospital"
-                    element={
-                      <OnboardingRoute>
-                        <SelectHospital />
-                      </OnboardingRoute>
-                    }
-                />
+                  {/* ── Mother onboarding (hospital pick) ── */}
+                  <Route
+                      path="/onboarding/hospital"
+                      element={
+                        <OnboardingRoute>
+                          <SelectHospital />
+                        </OnboardingRoute>
+                      }
+                  />
 
-                {/* ── Mother (patient) routes ── */}
-                <Route path="/home" element={<PrivateRoute allow={['patient']}><HomePage /></PrivateRoute>} />
-                <Route path="/baby-growth" element={<PrivateRoute allow={['patient']}><BabyGrowthPage /></PrivateRoute>} />
-                <Route path="/track" element={<PrivateRoute allow={['patient']}><TrackPage /></PrivateRoute>} />
-                <Route path="/track/contractions" element={<PrivateRoute allow={['patient']}><ContractionTimerPage /></PrivateRoute>} />
-                <Route path="/timeline" element={<PrivateRoute allow={['patient']}><TimelinePage /></PrivateRoute>} />
-                <Route path="/learn" element={<PrivateRoute allow={['patient']}><LearnPage /></PrivateRoute>} />
-                <Route path="/appointments" element={<PrivateRoute allow={['patient']}><AppointmentsPage /></PrivateRoute>} />
-                <Route path="/profile" element={<PrivateRoute allow={['patient']}><ProfilePage /></PrivateRoute>} />
-                <Route path="/profile/settings" element={<PrivateRoute allow={['patient']}><SettingsPage /></PrivateRoute>} />
-                <Route path="/profile/preferences" element={<PrivateRoute allow={['patient']}><PreferencesPage /></PrivateRoute>} />
-                <Route path="/profile/hospitals" element={<PrivateRoute allow={['patient']}><HospitalMap /></PrivateRoute>} />
-                <Route path="/emergency" element={<PrivateRoute allow={['patient']}><EmergencyPage /></PrivateRoute>} />
-                <Route path="/chat" element={<PrivateRoute allow={['patient']}><ChatPage /></PrivateRoute>} />
+                  {/* ── Mother (patient) routes ── */}
+                  <Route path="/home" element={<PrivateRoute allow={['patient']}><HomePage /></PrivateRoute>} />
+                  <Route path="/baby-growth" element={<PrivateRoute allow={['patient']}><BabyGrowthPage /></PrivateRoute>} />
+                  <Route path="/track" element={<PrivateRoute allow={['patient']}><TrackPage /></PrivateRoute>} />
+                  <Route path="/track/contractions" element={<PrivateRoute allow={['patient']}><ContractionTimerPage /></PrivateRoute>} />
+                  <Route path="/timeline" element={<PrivateRoute allow={['patient']}><TimelinePage /></PrivateRoute>} />
+                  <Route path="/learn" element={<PrivateRoute allow={['patient']}><LearnPage /></PrivateRoute>} />
+                  <Route path="/appointments" element={<PrivateRoute allow={['patient']}><AppointmentsPage /></PrivateRoute>} />
+                  <Route path="/profile" element={<PrivateRoute allow={['patient']}><ProfilePage /></PrivateRoute>} />
+                  <Route path="/profile/settings" element={<PrivateRoute allow={['patient']}><SettingsPage /></PrivateRoute>} />
+                  <Route path="/profile/preferences" element={<PrivateRoute allow={['patient']}><PreferencesPage /></PrivateRoute>} />
+                  <Route path="/profile/hospitals" element={<PrivateRoute allow={['patient']}><HospitalMap /></PrivateRoute>} />
+                  <Route path="/emergency" element={<PrivateRoute allow={['patient']}><EmergencyPage /></PrivateRoute>} />
+                  <Route path="/chat" element={<PrivateRoute allow={['patient']}><ChatPage /></PrivateRoute>} />
 
-                {/* ── Provider routes ── */}
-                <Route path="/provider/dashboard" element={<PrivateRoute allow={['provider']}><ProviderDashboard /></PrivateRoute>} />
-                <Route path="/provider/chats" element={<PrivateRoute allow={['provider']}><ProviderChatQueue /></PrivateRoute>} />
+                  {/* ── Provider routes ── */}
+                  <Route path="/provider/dashboard" element={<PrivateRoute allow={['provider']}><ProviderDashboard /></PrivateRoute>} />
+                  <Route path="/provider/chats" element={<PrivateRoute allow={['provider']}><ProviderChatQueue /></PrivateRoute>} />
 
-                {/* ── Fallback ── */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-              <GlobalControls />
-            </BrowserRouter>
-          </AuthProvider>
+                  {/* ── Fallback ── */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+                <GlobalControls />
+              </BrowserRouter>
+            </AuthProvider>
+          </TextSizeProvider>
         </ThemeProvider>
       </QueryClientProvider>
   )

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Loader2, Moon } from 'lucide-react'
 import api from '../../api/client'
+import { useTextSize } from '../../context/TextSizeContext'
 
 interface UserPreferences {
     language: 'en' | 'sw'
@@ -38,6 +39,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 
 export default function PreferencesPage() {
     const nav = useNavigate()
+    const { setTextSize } = useTextSize()
 
     const [preferences, setPreferences] = useState<UserPreferences>({
         language: 'sw',
@@ -56,13 +58,15 @@ export default function PreferencesPage() {
             try {
                 const response = await api.get('/patients/profile/')
                 if (!mounted) return
+                const fontSize = response.data.font_size || 'medium'
                 setPreferences(prev => ({
                     ...prev,
                     language:               response.data.language               || 'sw',
-                    font_size:              response.data.font_size              || 'medium',
+                    font_size:              fontSize,
                     notifications_enabled:  response.data.notifications_enabled !== false,
                     audio_guidance:         response.data.audio_guidance === true,
                 }))
+                setTextSize(fontSize)
             } catch (e) {
                 console.error('Error fetching preferences:', e)
             } finally {
@@ -76,6 +80,7 @@ export default function PreferencesPage() {
     const updatePreference = async (key: keyof UserPreferences, value: string | boolean) => {
         const updated = { ...preferences, [key]: value }
         setPreferences(updated)
+        if (key === 'font_size') setTextSize(value as UserPreferences['font_size'])
         setSaving(true)
         setError('')
         try {

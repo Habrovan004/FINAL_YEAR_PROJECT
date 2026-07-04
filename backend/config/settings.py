@@ -139,6 +139,13 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# The refresh token is delivered as an httpOnly cookie rather than in the
+# response body, so JS (and thus XSS) never has access to it. The access
+# token still goes in the JSON body — the frontend keeps it in memory only.
+AUTH_COOKIE = 'refresh_token'
+AUTH_COOKIE_SAMESITE = 'Strict'
+AUTH_COOKIE_SECURE = config('AUTH_COOKIE_SECURE', default=not DEBUG, cast=bool)
+
 # ── AI (Google Gemini) ─────────────────────────────────────────────────────
 # Get a key at https://aistudio.google.com/app/apikey. The chat falls back to
 # a friendly "service unavailable" message if the key is missing or invalid.

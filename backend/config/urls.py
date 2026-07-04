@@ -1,13 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework_simplejwt.views import TokenRefreshView
 
 import learn_views
+from accounts.views import CookieTokenRefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('accounts.urls')),
-    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('api/auth/token/refresh/', CookieTokenRefreshView.as_view(), name='token-refresh'),
     path('api/patients/', include('patients.urls')),
     path('api/hospitals/', include('hospitals.urls')),
     path('api/tracking/', include('tracking.urls')),

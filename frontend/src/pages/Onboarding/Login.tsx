@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff, Loader2, Baby, Stethoscope } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
+import { setAccessToken } from '../../api/tokenStore'
 import { useAuth } from '../../context/AuthContext'
 import './auth.css'
 
@@ -77,8 +78,7 @@ export default function Login() {
         phone_number: normalized,
         password: form.password,
       })
-      localStorage.setItem('access_token', data.access)
-      localStorage.setItem('refresh_token', data.refresh)
+      setAccessToken(data.access)
       setUser(data.user)
 
       // Role-based redirect — backend `user_type` wins over the on-page selector.

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import api from '../../api/client'
+import { setAccessToken } from '../../api/tokenStore'
 import { useTranslation } from 'react-i18next'
 import './OnboardingFlow.css'
 import './auth.css'
@@ -184,8 +185,7 @@ export default function OnboardingFlow() {
       }
 
       const { data: regData } = await api.post('/auth/register/', payload)
-      localStorage.setItem('access_token', regData.access)
-      localStorage.setItem('refresh_token', regData.refresh)
+      setAccessToken(regData.access)
 
       let finalUser = regData.user
 

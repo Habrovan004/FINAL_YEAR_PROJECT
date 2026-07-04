@@ -1,12 +1,14 @@
 import datetime
 
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from .serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer
@@ -18,6 +20,44 @@ from tracking.models import SymptomReport
 from emergency.models import EmergencyLog
 from medication.models import MedicationReminder
 from clinical.models import ANCVisit
+
+
+def _set_refresh_cookie(response, refresh_token_str):
+    response.set_cookie(
+        key=settings.AUTH_COOKIE,
+        value=refresh_token_str,
+        max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
+        httponly=True,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+        path='/',
+    )
+
+
+def _clear_refresh_cookie(response):
+    response.delete_cookie(settings.AUTH_COOKIE, path='/')
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    """Reads the refresh token from the httpOnly cookie instead of the body."""
+
+    def post(self, request, *args, **kwargs):
+        refresh_token = request.COOKIES.get(settings.AUTH_COOKIE)
+        if not refresh_token:
+            return Response({'error': 'Refresh token cookie missing.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = self.get_serializer(data={'refresh': refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:
+            raise InvalidToken(e.args[0])
+
+        validated = dict(serializer.validated_data)
+        rotated_refresh = validated.pop('refresh', None)
+        response = Response(validated, status=status.HTTP_200_OK)
+        if rotated_refresh:
+            _set_refresh_cookie(response, rotated_refresh)
+        return response
 
 
 @api_view(['POST'])
@@ -56,12 +96,13 @@ def register(request):
     if serializer.is_valid():
         user = serializer.save()
         tokens = RefreshToken.for_user(user)
-        return Response({
+        response = Response({
             'message': 'Account created successfully.',
             'user': UserSerializer(user).data,
             'access': str(tokens.access_token),
-            'refresh': str(tokens),
         }, status=status.HTTP_201_CREATED)
+        _set_refresh_cookie(response, str(tokens))
+        return response
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -71,14 +112,17 @@ def login(request):
     serializer = LoginSerializer(data=request.data)
     if serializer.is_valid():
         response_data = serializer.validated_data.copy()
-        
+        refresh_token = response_data.pop('refresh')
+
         try:
             db_user = User.objects.get(phone_number=request.data['phone_number'])
             response_data['redirect_to'] = db_user.user_type
         except User.DoesNotExist:
             pass
 
-        return Response(response_data, status=status.HTTP_200_OK)
+        response = Response(response_data, status=status.HTTP_200_OK)
+        _set_refresh_cookie(response, refresh_token)
+        return response
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -86,14 +130,15 @@ def login(request):
 @permission_classes([IsAuthenticated])
 def logout(request):
     """Blacklist the refresh token so it cannot be reused after logout."""
-    refresh_token = request.data.get('refresh')
-    if not refresh_token:
-        return Response({'error': 'Refresh token required.'}, status=status.HTTP_400_BAD_REQUEST)
-    try:
-        RefreshToken(refresh_token).blacklist()
-    except TokenError:
-        pass  # Already invalid — still proceed with logout
-    return Response({'message': 'Logged out successfully.'}, status=status.HTTP_200_OK)
+    refresh_token = request.COOKIES.get(settings.AUTH_COOKIE)
+    if refresh_token:
+        try:
+            RefreshToken(refresh_token).blacklist()
+        except TokenError:
+            pass  # Already invalid — still proceed with logout
+    response = Response({'message': 'Logged out successfully.'}, status=status.HTTP_200_OK)
+    _clear_refresh_cookie(response)
+    return response
 
 
 @api_view(['GET'])

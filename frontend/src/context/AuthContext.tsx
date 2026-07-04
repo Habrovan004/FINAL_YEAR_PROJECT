@@ -7,7 +7,7 @@ interface User {
   full_name: string
   phone_number: string
   email?: string | null
-  user_type: 'patient' | 'partner' | 'provider' | 'hospital_manager' | string
+  user_type: 'patient' | 'provider' | string
   is_verified: boolean
   is_onboarded: boolean
   hospital_id?: number | null
@@ -88,6 +88,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function dashboardPathFor(userType?: string) {
   if (userType === 'provider') return '/provider/dashboard'
-  if (userType === 'hospital_manager') return '/manager/dashboard'
   return '/home'
 }

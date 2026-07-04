@@ -2,8 +2,8 @@
 /api/learn/articles/ — canonical Learn article endpoint.
 
 Patient-facing GETs only return articles where `is_approved=True`.
-Hospital managers, admins, and staff users see every article (so they can
-approve drafts from the manager dashboard).
+Providers, admins, and staff users see every article (so they can
+approve drafts).
 """
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -15,7 +15,7 @@ from tips.serializers import TipSerializer
 
 
 # Roles that may read drafts and create / update / delete articles.
-MANAGEMENT_ROLES = {'hospital_manager', 'admin'}
+MANAGEMENT_ROLES = {'provider', 'admin'}
 
 
 def _is_manager_or_admin(user) -> bool:
@@ -33,7 +33,7 @@ def articles_list(request):
     if request.method == 'GET':
         qs = Tip.objects.all().select_related('category')
 
-        # Patients only see approved tips. Managers / admins see everything.
+        # Patients only see approved tips. Providers / admins see everything.
         if not _is_manager_or_admin(request.user):
             qs = qs.filter(is_approved=True)
 
@@ -48,9 +48,9 @@ def articles_list(request):
 
         return Response(TipSerializer(qs, many=True, context={'request': request}).data)
 
-    # POST — managers / admins only
+    # POST — providers / admins only
     if not _is_manager_or_admin(request.user):
-        return Response({'error': 'Manager access required.'}, status=403)
+        return Response({'error': 'Provider access required.'}, status=403)
 
     data = request.data
     # Accept both spec field names (title_en / body_en) and the model names
@@ -92,9 +92,9 @@ def articles_detail(request, pk):
             return Response({'error': 'Not found.'}, status=404)
         return Response(_serialize(tip, request))
 
-    # Mutations require manager / admin
+    # Mutations require provider / admin
     if not _is_manager_or_admin(request.user):
-        return Response({'error': 'Manager access required.'}, status=403)
+        return Response({'error': 'Provider access required.'}, status=403)
 
     if request.method == 'DELETE':
         tip.delete()

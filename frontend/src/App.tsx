@@ -22,14 +22,12 @@ import LearnPage from './pages/Learn/LearnPage'
 import AppointmentsPage from './pages/Appointments/AppointmentsPage'
 import ProfilePage from './pages/Profile/ProfilePage'
 import EmergencyPage from './pages/Emergency/EmergencyPage'
-import PartnerSupport from './pages/Profile/PartnerSupport'
 import SettingsPage from './pages/Profile/SettingsPage'
 import HospitalMap from './pages/Profile/HospitalMap'
 import PreferencesPage from './pages/Profile/PreferencesPage'
 import ChatPage from './pages/Chat/ChatPage'
 import ProviderDashboard from './pages/Provider/ProviderDashboard'
 import ProviderChatQueue from './pages/Provider/ProviderChatQueue'
-import ManagerDashboard from './pages/Manager/ManagerDashboard'
 import './App.css'
 
 const queryClient = new QueryClient()
@@ -77,7 +75,7 @@ function GlobalControls() {
     ONBOARDING_PATH_PREFIXES.some(prefix => location.pathname.startsWith(prefix))
 
   // Pages that render their own theme / language toggles in the header row.
-  const PAGES_WITH_OWN_CONTROLS = ['/provider/dashboard', '/manager/dashboard']
+  const PAGES_WITH_OWN_CONTROLS = ['/provider/dashboard']
   if (PAGES_WITH_OWN_CONTROLS.includes(location.pathname)) return null
 
   const toggleLanguage = () => {
@@ -143,7 +141,6 @@ function App() {
                 <Route path="/learn" element={<PrivateRoute allow={['patient']}><LearnPage /></PrivateRoute>} />
                 <Route path="/appointments" element={<PrivateRoute allow={['patient']}><AppointmentsPage /></PrivateRoute>} />
                 <Route path="/profile" element={<PrivateRoute allow={['patient']}><ProfilePage /></PrivateRoute>} />
-                <Route path="/profile/partner" element={<PrivateRoute allow={['patient']}><PartnerSupport /></PrivateRoute>} />
                 <Route path="/profile/settings" element={<PrivateRoute allow={['patient']}><SettingsPage /></PrivateRoute>} />
                 <Route path="/profile/preferences" element={<PrivateRoute allow={['patient']}><PreferencesPage /></PrivateRoute>} />
                 <Route path="/profile/hospitals" element={<PrivateRoute allow={['patient']}><HospitalMap /></PrivateRoute>} />
@@ -153,9 +150,6 @@ function App() {
                 {/* ── Provider routes ── */}
                 <Route path="/provider/dashboard" element={<PrivateRoute allow={['provider']}><ProviderDashboard /></PrivateRoute>} />
                 <Route path="/provider/chats" element={<PrivateRoute allow={['provider']}><ProviderChatQueue /></PrivateRoute>} />
-
-                {/* ── Hospital Manager routes ── */}
-                <Route path="/manager/dashboard" element={<PrivateRoute allow={['hospital_manager']}><ManagerDashboard /></PrivateRoute>} />
 
                 {/* ── Fallback ── */}
                 <Route path="*" element={<Navigate to="/" replace />} />

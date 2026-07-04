@@ -142,8 +142,6 @@ export default function VerifyOTP() {
        setTimeout(() => {
          if (userType === 'provider') {
            nav('/provider/dashboard')
-         } else if (userType === 'hospital_manager') {
-           nav('/manager/dashboard')
          } else if (!isOnboarded) {
            nav('/onboarding/hospital')
          } else {

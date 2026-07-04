@@ -1,4 +1,3 @@
-import uuid
 import datetime
 
 from django.utils import timezone
@@ -10,23 +9,15 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from .serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer, PartnerLinkSerializer
+    RegisterSerializer, LoginSerializer, UserSerializer
 )
-from .models import User, PartnerLink
+from .models import User
 from .throttles import PasswordResetThrottle, RegisterThrottle
 from appointments.models import Appointment
 from tracking.models import SymptomReport
 from emergency.models import EmergencyLog
 from medication.models import MedicationReminder
 from clinical.models import ANCVisit
-
-
-def generate_invitation_code():
-    """Generate a unique 8-character uppercase invitation code."""
-    while True:
-        code = uuid.uuid4().hex[:8].upper()
-        if not PartnerLink.objects.filter(invitation_code=code).exists():
-            return code
 
 
 @api_view(['POST'])
@@ -215,45 +206,3 @@ def provider_dashboard(request):
             } for v in anc_high_risk]
         ),
     })
-
-
-@api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
-def partner_link(request):
-    if request.method == 'POST':
-        partner_phone = request.data.get('partner_phone')
-        if not partner_phone:
-            return Response({'error': 'Partner phone is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        link, created = PartnerLink.objects.update_or_create(
-            patient=request.user,
-            defaults={
-                'partner_phone': partner_phone,
-                'invitation_code': generate_invitation_code(),
-                'is_confirmed': False
-            }
-        )
-        return Response(PartnerLinkSerializer(link).data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
-
-    try:
-        link = PartnerLink.objects.get(patient=request.user)
-        return Response(PartnerLinkSerializer(link).data)
-    except PartnerLink.DoesNotExist:
-        return Response({'message': 'No partner linked.'}, status=status.HTTP_404_NOT_FOUND)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def accept_invitation(request):
-    code = request.data.get('code')
-    if not code:
-        return Response({'error': 'Invitation code is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        link = PartnerLink.objects.get(invitation_code=code, is_confirmed=False)
-        link.partner = request.user
-        link.is_confirmed = True
-        link.save()
-        return Response({'message': f'Linked successfully to {link.patient.full_name}.'})
-    except PartnerLink.DoesNotExist:
-        return Response({'error': 'Invalid or already used invitation code.'}, status=status.HTTP_404_NOT_FOUND)

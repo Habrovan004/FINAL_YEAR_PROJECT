@@ -23,9 +23,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     USER_TYPES = [
         ('patient', 'Mother'),
-        ('partner', 'Partner'),
         ('provider', 'Healthcare Provider'),
-        ('hospital_manager', 'Hospital Manager'),
     ]
 
     phone_number = models.CharField(max_length=20, unique=True)
@@ -64,17 +62,6 @@ class ProviderProfile(models.Model):
         # Explicit type conversion to avoid IDE errors
         return "Provider: " + str(self.user.full_name)
 
-class HospitalManagerProfile(models.Model):
-    objects = models.Manager()
-
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='manager_profile')
-    hospital = models.ForeignKey('hospitals.Hospital', on_delete=models.CASCADE, related_name='managers')
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return "Manager: " + str(self.user.full_name)
-
-
 class OTPCode(models.Model):
     objects = models.Manager()
     
@@ -94,26 +81,3 @@ class OTPCode(models.Model):
         cls.objects.filter(user=user).delete()
         otp_code = str(random.randint(100000, 999999))
         return cls.objects.create(user=user, code=otp_code)
-
-class PartnerLink(models.Model):
-    objects = models.Manager()
-    
-    patient = models.OneToOneField(User, on_delete=models.CASCADE, related_name='partner_link')
-    partner = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='patient_links')
-    partner_phone = models.CharField(max_length=20)
-    invitation_code = models.CharField(max_length=10, unique=True)
-    is_confirmed = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    @classmethod
-    def generate_invitation(cls, patient, partner_phone):
-        # Simplified generator
-        chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-        code = ''.join(random.choice(chars) for _ in range(8))
-        return cls.objects.update_or_create(
-            patient=patient,
-            defaults={'partner_phone': partner_phone, 'invitation_code': code, 'is_confirmed': False}
-        )
-
-    def __str__(self):
-        return "Link: " + str(self.patient.full_name)

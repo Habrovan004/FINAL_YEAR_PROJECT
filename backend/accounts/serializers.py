@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import F
-from .models import User, OTPCode, PartnerLink, ProviderProfile
+from .models import User, OTPCode, ProviderProfile
 from patients.models import PatientProfile
 from hospitals.models import Hospital
 
@@ -32,7 +32,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         ]
 
     def validate_user_type(self, value):
-        allowed = {'patient', 'provider', 'hospital_manager', 'partner'}
+        allowed = {'patient', 'provider'}
         if value not in allowed:
             raise serializers.ValidationError(f"Role must be one of: {', '.join(allowed)}")
         return value
@@ -76,11 +76,6 @@ class RegisterSerializer(serializers.ModelSerializer):
                 hospital=hospital,
                 specialization=specialization,
             )
-
-        elif user.user_type == 'hospital_manager':
-            if not hospital:
-                raise serializers.ValidationError({'hospital_id': 'Hospital Manager must be linked to a hospital.'})
-            HospitalManagerProfile.objects.create(user=user, hospital=hospital)
 
         return user
 
@@ -133,10 +128,6 @@ class UserSerializer(serializers.ModelSerializer):
             pp = getattr(obj, 'provider_profile', None)
             if pp:
                 return pp.hospital_id
-        if obj.user_type == 'hospital_manager':
-            mp = getattr(obj, 'manager_profile', None)
-            if mp:
-                return mp.hospital_id
         return None
 
     def get_hospital_name(self, obj):
@@ -152,17 +143,3 @@ class UserSerializer(serializers.ModelSerializer):
 class VerifyOTPSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
     code = serializers.CharField(max_length=6)
-
-
-class PartnerLinkSerializer(serializers.ModelSerializer):
-    patient_name = serializers.CharField(source='patient.full_name', read_only=True)
-    partner_name = serializers.CharField(source='partner.full_name', read_only=True)
-
-    class Meta:
-        model = PartnerLink
-        fields = '__all__'
-        read_only_fields = ['patient', 'partner', 'invitation_code', 'is_confirmed']
-
-
-# Defer import to avoid circular reference at module load
-from .models import HospitalManagerProfile  # noqa: E402

@@ -9,6 +9,7 @@ import {
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
+import { useTextSize } from '../../context/TextSizeContext'
 import ANCVisitModal, { type PatientRow, type ANCSaveResponse } from './ANCVisitModal'
 import './provider.css'
 
@@ -39,6 +40,18 @@ interface DashboardPayload {
     reasons?: string[]
     time: string
   }[]
+}
+
+interface AppointmentRow {
+  id: number
+  patient_name: string
+  patient_phone: string
+  visit_type_display: string
+  appointment_date: string
+  appointment_time: string
+  status: 'upcoming' | 'attended' | 'missed' | 'cancelled'
+  hospital_name: string | null
+  notes: string
 }
 
 interface ChatQueueRow {
@@ -224,6 +237,7 @@ export default function ProviderDashboard() {
   const nav = useNavigate()
   const { user, logout } = useAuth()
   const { dark, toggle: toggleTheme } = useTheme()
+  const { textSize, cycleTextSize } = useTextSize()
   const { i18n } = useTranslation()
   const activeLanguage = i18n.language?.startsWith('sw') ? 'sw' : 'en'
 
@@ -237,6 +251,9 @@ export default function ProviderDashboard() {
   const [ancPatients, setAncPatients] = useState<PatientRow[]>([])
   const [todayCount, setTodayCount] = useState(0)
   const [toast, setToast] = useState<{ message: string } | null>(null)
+
+  const [upcomingAppts, setUpcomingAppts] = useState<AppointmentRow[]>([])
+  const [actioningApptId, setActioningApptId] = useState<number | null>(null)
 
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<Set<string>>(new Set())
   const [fadingAlerts, setFadingAlerts] = useState<Set<string>>(new Set())
@@ -269,16 +286,18 @@ export default function ProviderDashboard() {
     if (!silent) setLoading(true)
     setErr('')
     try {
-      const [dash, queue, pats] = await Promise.all([
+      const [dash, queue, pats, appts] = await Promise.all([
         api.get<DashboardPayload>('/auth/provider/dashboard/'),
         api.get<ChatQueueRow[]>('/chatbot/provider/queue/'),
         api.get<PatientRow[]>('/patients/'),
+        api.get<AppointmentRow[]>('/appointments/?filter=upcoming'),
       ])
       setData(dash.data)
       setChatQueue(queue.data)
       setPatients(pats.data)
       setAncPatients(pats.data)
       setTodayCount(dash.data?.appointments?.today?.length ?? 0)
+      setUpcomingAppts(appts.data)
     } catch (e) {
       setErr(extractApiError(e, 'Failed to load dashboard'))
     } finally {
@@ -332,7 +351,46 @@ export default function ProviderDashboard() {
     setAncOpen(true)
   }
 
+  const respondToAppointment = async (id: number, newStatus: 'attended' | 'missed' | 'cancelled') => {
+    setActioningApptId(id)
+    try {
+      await api.patch(`/appointments/${id}/`, { status: newStatus })
+      setUpcomingAppts(prev => prev.filter(a => a.id !== id))
+      setToast({ message: `Appointment marked ${newStatus}.` })
+      void load(true)
+    } catch (e) {
+      setToast({ message: extractApiError(e, 'Could not update the appointment') })
+    } finally {
+      setActioningApptId(null)
+    }
+  }
+
+  const apptActionBtn = (bg: string, color: string): React.CSSProperties => ({
+    background: bg, color, border: 'none', padding: '6px 10px', borderRadius: 8,
+    fontSize: 11, fontWeight: 700, cursor: 'pointer',
+    fontFamily: "'DM Sans', system-ui, sans-serif", flexShrink: 0,
+  })
+
+  const renderApptActions = (id: number) => {
+    const busy = actioningApptId === id
+    return (
+      <>
+        <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(29,158,117,0.12)', '#1D9E75'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(id, 'attended')}>
+          Attended
+        </button>
+        <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(212,83,126,0.1)', '#D4537E'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(id, 'missed')}>
+          Missed
+        </button>
+        <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(0,0,0,0.06)', 'var(--pv-text)'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(id, 'cancelled')}>
+          Cancel
+        </button>
+      </>
+    )
+  }
+
   const todaysAppts = data?.appointments.today ?? []
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const laterAppts = upcomingAppts.filter(a => a.appointment_date !== todayIso)
   const allAlerts = data?.critical_alerts ?? []
   const alerts = allAlerts.filter(a => !acknowledgedAlerts.has(`${a.type}-${a.id}`))
 
@@ -396,6 +454,15 @@ export default function ProviderDashboard() {
           >
             <Languages size={13} />
             <span>{activeLanguage === 'sw' ? 'SW' : 'EN'}</span>
+          </button>
+          <button
+            type="button"
+            style={{ ...hBtn, width: 'auto', padding: '0 10px', gap: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.4px' }}
+            onClick={cycleTextSize}
+            aria-label="Change text size"
+          >
+            <span>Aa</span>
+            <span>{textSize === 'small' ? 'S' : textSize === 'large' ? 'L' : 'M'}</span>
           </button>
           <button type="button" style={hBtn} onClick={() => { logout(); nav('/') }} aria-label="Sign out">
             <LogOut size={15} />
@@ -604,18 +671,21 @@ export default function ProviderDashboard() {
                   <p className="alert-patient">{a.patient}</p>
                   <p className="alert-meta">{a.type} · {a.time}</p>
                 </div>
-                <button
-                  type="button"
-                  style={{
-                    background: '#D4537E', color: '#fff', border: 'none',
-                    padding: '6px 12px', borderRadius: 8,
-                    fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                    fontFamily: "'DM Sans', system-ui, sans-serif", flexShrink: 0,
-                  }}
-                  onClick={() => startVisitFor(a.patient)}
-                >
-                  Start visit
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    style={{
+                      background: '#D4537E', color: '#fff', border: 'none',
+                      padding: '6px 12px', borderRadius: 8,
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      fontFamily: "'DM Sans', system-ui, sans-serif", flexShrink: 0,
+                    }}
+                    onClick={() => startVisitFor(a.patient)}
+                  >
+                    Start visit
+                  </button>
+                  {renderApptActions(a.id)}
+                </div>
               </div>
             ))}
             <button
@@ -634,6 +704,42 @@ export default function ProviderDashboard() {
               Schedule appointment
             </button>
           </>
+        )}
+      </section>
+
+      {/* ── Upcoming appointments (beyond today) ── */}
+      <section
+        className="provider-section pv-fade-up"
+        style={{ borderLeft: '3px solid #D4537E', animationDelay: '150ms' }}
+      >
+        <div className="provider-section-header">
+          <h2>Upcoming appointments</h2>
+          <span className="badge" aria-live="polite">{laterAppts.length}</span>
+        </div>
+
+        {laterAppts.length === 0 ? (
+          <p className="provider-empty">No appointments scheduled beyond today.</p>
+        ) : (
+          laterAppts.map(a => (
+            <div
+              key={a.id}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.06)', gap: 10,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p className="alert-patient">{a.patient_name}</p>
+                <p className="alert-meta">
+                  {a.visit_type_display} · {a.appointment_date} at {a.appointment_time}
+                  {a.hospital_name ? ` · ${a.hospital_name}` : ''}
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {renderApptActions(a.id)}
+              </div>
+            </div>
+          ))
         )}
       </section>
 

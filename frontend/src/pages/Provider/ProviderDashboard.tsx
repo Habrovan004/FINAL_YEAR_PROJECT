@@ -127,6 +127,7 @@ function riskColor(r: string) {
 function PatientPanel({
   patientId, patientName, onClose,
 }: { patientId: number; patientName: string; onClose: () => void }) {
+  const { t } = useTranslation()
   const [detail, setDetail] = useState<PatientDetailData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -149,7 +150,7 @@ function PatientPanel({
         style={{
           position: 'absolute', right: 0, top: 0, bottom: 0,
           width: 320, maxWidth: '92vw',
-          background: '#fff', overflowY: 'auto', padding: '20px 16px',
+          background: 'var(--pv-card)', overflowY: 'auto', padding: '20px 16px',
           boxShadow: '-8px 0 32px rgba(0,0,0,0.14)',
           fontFamily: "'DM Sans', system-ui, sans-serif",
           animation: 'pvSlideIn 0.22s ease',
@@ -158,16 +159,16 @@ function PatientPanel({
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
-            <p style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#D4537E', fontWeight: 700, margin: 0 }}>
-              Patient Profile
+            <p style={{ fontSize: '0.625rem', letterSpacing: '0.14em', textTransform: 'uppercase', color: '#D4537E', fontWeight: 700, margin: 0 }}>
+              {t('provider_patient_profile')}
             </p>
-            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 600, margin: '3px 0 0', color: '#1c1c1e' }}>
+            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: '1.125rem', fontWeight: 600, margin: '3px 0 0', color: 'var(--pv-text)' }}>
               {patientName}
             </h3>
           </div>
           <button
             onClick={onClose}
-            style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b6b70' }}
+            style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: 'var(--pv-chip-bg)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--pv-text-muted)' }}
           >
             <X size={14} />
           </button>
@@ -179,42 +180,42 @@ function PatientPanel({
           </div>
         ) : detail ? (
           <>
-            <div style={{ background: '#F7F3F0', borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
+            <div style={{ background: 'var(--pv-bg)', borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
               {[
-                ['Risk level', <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: riskColor(detail.summary.risk_level), padding: '2px 8px', borderRadius: 999 }}>{detail.summary.risk_level.toUpperCase()}</span>],
-                ['Gestation', `${detail.summary.gestational_age_weeks}wk · ${detail.summary.trimester}`],
-                detail.summary.due_date ? ['Due date', new Date(detail.summary.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })] : null,
-                ['Phone', detail.summary.phone_number],
+                [t('provider_risk_level'), <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#fff', background: riskColor(detail.summary.risk_level), padding: '2px 8px', borderRadius: 999 }}>{detail.summary.risk_level.toUpperCase()}</span>],
+                [t('provider_gestation'), `${detail.summary.gestational_age_weeks}wk · ${detail.summary.trimester}`],
+                detail.summary.due_date ? [t('provider_due_date'), new Date(detail.summary.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })] : null,
+                [t('provider_phone'), detail.summary.phone_number],
               ].filter(Boolean).map((row, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: i < 3 ? 7 : 0 }}>
-                  <span style={{ fontSize: 12, color: '#6b6b70' }}>{row![0] as string}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#1c1c1e' }}>{row![1] as React.ReactNode}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--pv-text-muted)' }}>{row![0] as string}</span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--pv-text)' }}>{row![1] as React.ReactNode}</span>
                 </div>
               ))}
             </div>
 
-            <p style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#D4537E', fontWeight: 700, marginBottom: 10 }}>
-              Recent ANC Visits
+            <p style={{ fontSize: '0.625rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#D4537E', fontWeight: 700, marginBottom: 10 }}>
+              {t('provider_recent_anc_visits')}
             </p>
 
             {recentVisits.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', padding: '14px 0' }}>No visits recorded yet.</p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--pv-text-muted)', textAlign: 'center', padding: '14px 0' }}>{t('provider_no_visits_recorded')}</p>
             ) : recentVisits.map(v => (
-              <div key={v.id} style={{ borderRadius: 10, border: '0.5px solid rgba(0,0,0,0.08)', padding: '10px 12px', marginBottom: 8 }}>
+              <div key={v.id} style={{ borderRadius: 10, border: '0.5px solid var(--pv-border)', padding: '10px 12px', marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1c1c1e' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--pv-text)' }}>
                     {new Date(v.visit_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                   </span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: riskColor(v.risk_level), background: `${riskColor(v.risk_level)}18`, padding: '1px 7px', borderRadius: 999 }}>
+                  <span style={{ fontSize: '0.625rem', fontWeight: 700, color: riskColor(v.risk_level), background: `${riskColor(v.risk_level)}18`, padding: '1px 7px', borderRadius: 999 }}>
                     {v.risk_level.toUpperCase()}
                   </span>
                 </div>
-                <p style={{ fontSize: 11, color: '#4b5563', margin: 0 }}>
+                <p style={{ fontSize: '0.6875rem', color: 'var(--pv-text-muted)', margin: 0 }}>
                   BP {v.blood_pressure_systolic}/{v.blood_pressure_diastolic} mmHg
                   {v.weight_kg ? ` · ${v.weight_kg} kg` : ''}
                 </p>
                 {v.risk_reasons?.length > 0 && (
-                  <p style={{ fontSize: 10, color: '#9ca3af', margin: '3px 0 0' }}>
+                  <p style={{ fontSize: '0.625rem', color: 'var(--pv-text-muted)', margin: '3px 0 0' }}>
                     {v.risk_reasons.slice(0, 2).join(' · ')}
                   </p>
                 )}
@@ -222,8 +223,8 @@ function PatientPanel({
             ))}
           </>
         ) : (
-          <p style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', padding: '20px 0' }}>
-            Could not load patient details.
+          <p style={{ fontSize: '0.75rem', color: 'var(--pv-text-muted)', textAlign: 'center', padding: '20px 0' }}>
+            {t('provider_could_not_load_patient')}
           </p>
         )}
       </div>
@@ -238,7 +239,7 @@ export default function ProviderDashboard() {
   const { user, logout } = useAuth()
   const { dark, toggle: toggleTheme } = useTheme()
   const { textSize, cycleTextSize } = useTextSize()
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const activeLanguage = i18n.language?.startsWith('sw') ? 'sw' : 'en'
 
   const [data, setData] = useState<DashboardPayload | null>(null)
@@ -253,6 +254,7 @@ export default function ProviderDashboard() {
   const [toast, setToast] = useState<{ message: string } | null>(null)
 
   const [upcomingAppts, setUpcomingAppts] = useState<AppointmentRow[]>([])
+  const [pastAppts, setPastAppts] = useState<AppointmentRow[]>([])
   const [actioningApptId, setActioningApptId] = useState<number | null>(null)
 
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<Set<string>>(new Set())
@@ -286,11 +288,12 @@ export default function ProviderDashboard() {
     if (!silent) setLoading(true)
     setErr('')
     try {
-      const [dash, queue, pats, appts] = await Promise.all([
+      const [dash, queue, pats, appts, history] = await Promise.all([
         api.get<DashboardPayload>('/auth/provider/dashboard/'),
         api.get<ChatQueueRow[]>('/chatbot/provider/queue/'),
         api.get<PatientRow[]>('/patients/'),
         api.get<AppointmentRow[]>('/appointments/?filter=upcoming'),
+        api.get<AppointmentRow[]>('/appointments/?filter=history'),
       ])
       setData(dash.data)
       setChatQueue(queue.data)
@@ -298,12 +301,13 @@ export default function ProviderDashboard() {
       setAncPatients(pats.data)
       setTodayCount(dash.data?.appointments?.today?.length ?? 0)
       setUpcomingAppts(appts.data)
+      setPastAppts(history.data.slice().reverse())
     } catch (e) {
-      setErr(extractApiError(e, 'Failed to load dashboard'))
+      setErr(extractApiError(e, t('provider_failed_to_load')))
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -333,7 +337,7 @@ export default function ProviderDashboard() {
     setAncOpen(false)
     setAncPatients(patients)
     void load(true)
-    setToast({ message: 'ANC visit recorded successfully' })
+    setToast({ message: t('provider_ai_recorded_success') })
     if (res.risk_level === 'high') console.warn('HIGH RISK flagged:', res.risk_reasons)
   }
 
@@ -351,15 +355,20 @@ export default function ProviderDashboard() {
     setAncOpen(true)
   }
 
+  const statusLabel = (status: 'attended' | 'missed' | 'cancelled') =>
+    status === 'attended' ? t('provider_status_attended')
+      : status === 'missed' ? t('provider_status_missed')
+      : t('provider_status_cancelled')
+
   const respondToAppointment = async (id: number, newStatus: 'attended' | 'missed' | 'cancelled') => {
     setActioningApptId(id)
     try {
       await api.patch(`/appointments/${id}/`, { status: newStatus })
       setUpcomingAppts(prev => prev.filter(a => a.id !== id))
-      setToast({ message: `Appointment marked ${newStatus}.` })
+      setToast({ message: t('provider_appt_marked', { status: statusLabel(newStatus) }) })
       void load(true)
     } catch (e) {
-      setToast({ message: extractApiError(e, 'Could not update the appointment') })
+      setToast({ message: extractApiError(e, t('provider_appt_update_failed')) })
     } finally {
       setActioningApptId(null)
     }
@@ -367,7 +376,7 @@ export default function ProviderDashboard() {
 
   const apptActionBtn = (bg: string, color: string): React.CSSProperties => ({
     background: bg, color, border: 'none', padding: '6px 10px', borderRadius: 8,
-    fontSize: 11, fontWeight: 700, cursor: 'pointer',
+    fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer',
     fontFamily: "'DM Sans', system-ui, sans-serif", flexShrink: 0,
   })
 
@@ -376,17 +385,23 @@ export default function ProviderDashboard() {
     return (
       <>
         <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(29,158,117,0.12)', '#1D9E75'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(id, 'attended')}>
-          Attended
+          {t('provider_attended')}
         </button>
         <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(212,83,126,0.1)', '#D4537E'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(id, 'missed')}>
-          Missed
+          {t('provider_missed')}
         </button>
         <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(0,0,0,0.06)', 'var(--pv-text)'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(id, 'cancelled')}>
-          Cancel
+          {t('provider_cancel')}
         </button>
       </>
     )
   }
+
+  const apptStatusBadge = (status: AppointmentRow['status']): React.CSSProperties => ({
+    fontSize: '0.625rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+    color: status === 'attended' ? '#1D9E75' : status === 'missed' ? '#D4537E' : 'var(--pv-text-muted)',
+    background: status === 'attended' ? 'rgba(29,158,117,0.12)' : status === 'missed' ? 'rgba(212,83,126,0.1)' : 'var(--pv-chip-bg)',
+  })
 
   const todaysAppts = data?.appointments.today ?? []
   const todayIso = new Date().toISOString().slice(0, 10)
@@ -438,33 +453,33 @@ export default function ProviderDashboard() {
       {/* ── FIX 1: Header ── */}
       <header className="provider-header">
         <div className="provider-header-info">
-          <p className="provider-eyebrow">Provider</p>
+          <p className="provider-eyebrow">{t('provider_label')}</p>
           <h1 className="provider-name">{data?.provider_name || user?.full_name}</h1>
-          <p className="provider-facility">{data?.hospital || 'Facility'}</p>
+          <p className="provider-facility">{data?.hospital || t('provider_facility_fallback')}</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <button type="button" style={hBtn} onClick={toggleTheme} aria-label={dark ? 'Light mode' : 'Dark mode'}>
+          <button type="button" style={hBtn} onClick={toggleTheme} aria-label={dark ? t('provider_light_mode') : t('provider_dark_mode')}>
             {dark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
           <button
             type="button"
-            style={{ ...hBtn, width: 'auto', padding: '0 10px', gap: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.4px' }}
+            style={{ ...hBtn, width: 'auto', padding: '0 10px', gap: 4, fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.4px' }}
             onClick={toggleLanguage}
-            aria-label="Switch language"
+            aria-label={t('provider_switch_language')}
           >
             <Languages size={13} />
             <span>{activeLanguage === 'sw' ? 'SW' : 'EN'}</span>
           </button>
           <button
             type="button"
-            style={{ ...hBtn, width: 'auto', padding: '0 10px', gap: 4, fontSize: 11, fontWeight: 700, letterSpacing: '0.4px' }}
+            style={{ ...hBtn, width: 'auto', padding: '0 10px', gap: 4, fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.4px' }}
             onClick={cycleTextSize}
-            aria-label="Change text size"
+            aria-label={t('provider_change_text_size')}
           >
             <span>Aa</span>
             <span>{textSize === 'small' ? 'S' : textSize === 'large' ? 'L' : 'M'}</span>
           </button>
-          <button type="button" style={hBtn} onClick={() => { logout(); nav('/') }} aria-label="Sign out">
+          <button type="button" style={hBtn} onClick={() => { logout(); nav('/') }} aria-label={t('provider_sign_out')}>
             <LogOut size={15} />
           </button>
         </div>
@@ -482,15 +497,15 @@ export default function ProviderDashboard() {
         >
           <Users size={16} style={{ color: '#D4537E' }} />
           <p className="stat-value">{data?.stats.total_patients ?? 0}</p>
-          <p className="stat-label">Patients</p>
-          <p style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>Active this month</p>
+          <p className="stat-label">{t('provider_stat_patients')}</p>
+          <p style={{ fontSize: '0.5625rem', color: '#9ca3af', marginTop: 1 }}>{t('provider_stat_patients_sub')}</p>
         </div>
 
         {/* Attendance */}
         <div
           className="stat-card pv-fade-up"
           style={{ height: 100, borderRadius: 14, animationDelay: '60ms', justifyContent: 'center', gap: 3 }}
-          title={attendanceRate == null ? 'No past appointments yet' : `${data?.stats.attendance_attended ?? 0} of ${data?.stats.attendance_total ?? 0} attended`}
+          title={attendanceRate == null ? t('provider_stat_no_past_appts') : t('provider_stat_attended_of', { attended: data?.stats.attendance_attended ?? 0, total: data?.stats.attendance_total ?? 0 })}
         >
           <Activity size={16} style={{ color: '#1D9E75' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -501,7 +516,7 @@ export default function ProviderDashboard() {
                 : <TrendingDown size={13} style={{ color: '#E24B4A' }} />
             )}
           </div>
-          <p className="stat-label">Attendance</p>
+          <p className="stat-label">{t('provider_stat_attendance')}</p>
         </div>
 
         {/* Pending alerts */}
@@ -514,7 +529,7 @@ export default function ProviderDashboard() {
         >
           <AlertTriangle size={16} style={{ color: '#E24B4A' }} />
           <p className="stat-value" style={{ color: pendingCount > 0 ? '#E24B4A' : undefined }}>{pendingCount}</p>
-          <p className="stat-label">Pending alerts</p>
+          <p className="stat-label">{t('provider_stat_pending_alerts')}</p>
         </div>
       </section>
 
@@ -526,23 +541,23 @@ export default function ProviderDashboard() {
         <div className="provider-section-header">
           <h2>
             <AlertTriangle size={13} style={{ color: '#E24B4A', marginRight: 5, verticalAlign: -2 }} />
-            HIGH RISK alerts
+            {t('provider_high_risk_alerts')}
           </h2>
           {highRiskCount > 0 && <span className="badge-red">{highRiskCount}</span>}
         </div>
 
         {alerts.length === 0 ? (
-          <p className="provider-empty">No urgent alerts — all clear.</p>
+          <p className="provider-empty">{t('provider_no_alerts')}</p>
         ) : alerts.map(a => {
           const key = `${a.type}-${a.id}`
           const isFading = fadingAlerts.has(key)
           const isHigh = (a.type === 'symptom' || a.type === 'anc_visit') && a.risk === 'high'
           const isStale = isOlderThan24h(a.time)
           const meta = a.type === 'symptom'
-            ? `Symptom report · ${a.risk?.toUpperCase() ?? ''}`
+            ? `${t('provider_symptom_report')} · ${a.risk?.toUpperCase() ?? ''}`
             : a.type === 'sos'
-              ? `SOS · ${a.location ?? ''}`
-              : `ANC visit · ${a.risk?.toUpperCase() ?? ''}`
+              ? `${t('provider_sos')} · ${a.location ?? ''}`
+              : `${t('provider_anc_visit_short')} · ${a.risk?.toUpperCase() ?? ''}`
           const reasonsText = a.reasons?.length ? a.reasons.join(' · ') : ''
           const matchedPat = patients.find(p => p.full_name === a.patient)
 
@@ -577,8 +592,8 @@ export default function ProviderDashboard() {
                   type="button"
                   style={{
                     background: 'none', border: 'none', padding: 0, margin: 0,
-                    fontSize: 13, fontWeight: 700,
-                    color: matchedPat ? '#D4537E' : '#1c1c1e',
+                    fontSize: '0.8125rem', fontWeight: 700,
+                    color: matchedPat ? '#D4537E' : 'var(--pv-text)',
                     cursor: matchedPat ? 'pointer' : 'default',
                     textDecoration: matchedPat ? 'underline dotted' : 'none',
                     fontFamily: "'DM Sans', system-ui, sans-serif",
@@ -589,8 +604,8 @@ export default function ProviderDashboard() {
                   {a.patient}
                 </button>
                 <p className="alert-meta" style={{ marginTop: 2 }}>{meta}</p>
-                {reasonsText && <p className="alert-meta" style={{ color: '#9ca3af', marginTop: 2 }}>{reasonsText}</p>}
-                <p style={{ fontSize: 10, color: '#9ca3af', marginTop: 3 }}>{timeAgo(a.time)}</p>
+                {reasonsText && <p className="alert-meta" style={{ color: 'var(--pv-text-muted)', marginTop: 2 }}>{reasonsText}</p>}
+                <p style={{ fontSize: '0.625rem', color: 'var(--pv-text-muted)', marginTop: 3 }}>{timeAgo(a.time)}</p>
               </div>
 
               {/* Action buttons */}
@@ -598,7 +613,7 @@ export default function ProviderDashboard() {
                 {a.type !== 'sos' && matchedPat && (
                   <button
                     type="button"
-                    title="Call patient"
+                    title={t('provider_call_patient')}
                     style={iconBtn('rgba(29,158,117,0.1)', '#1D9E75')}
                     onClick={() => window.open(`tel:${matchedPat.phone_number}`)}
                   >
@@ -608,7 +623,7 @@ export default function ProviderDashboard() {
                 {a.type !== 'sos' && (
                   <button
                     type="button"
-                    title="Message patient"
+                    title={t('provider_message_patient')}
                     style={iconBtn('rgba(212,83,126,0.1)', '#D4537E')}
                     onClick={() => nav('/provider/chats')}
                   >
@@ -617,8 +632,8 @@ export default function ProviderDashboard() {
                 )}
                 <button
                   type="button"
-                  title="Acknowledge"
-                  style={iconBtn('rgba(0,0,0,0.06)', '#6b6b70')}
+                  title={t('provider_acknowledge')}
+                  style={iconBtn('var(--pv-chip-bg)', 'var(--pv-text-muted)')}
                   onClick={() => handleAcknowledge(key)}
                 >
                   <X size={11} />
@@ -635,26 +650,26 @@ export default function ProviderDashboard() {
         style={{ borderLeft: '3px solid #D4537E', animationDelay: '140ms' }}
       >
         <div className="provider-section-header">
-          <h2>Today's appointments</h2>
+          <h2>{t('provider_todays_appointments')}</h2>
           <span className="badge" aria-live="polite">{todayCount}</span>
         </div>
 
         {todaysAppts.length === 0 ? (
           <div className="provider-empty-block">
-            <p className="provider-empty">No appointments today.</p>
+            <p className="provider-empty">{t('provider_no_appointments_today')}</p>
             <button
               type="button"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 background: 'rgba(212,83,126,0.1)', color: '#D4537E',
                 border: '1px solid #D4537E', padding: '7px 14px',
-                borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                borderRadius: 10, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
                 fontFamily: "'DM Sans', system-ui, sans-serif",
               }}
               onClick={() => setAncOpen(true)}
             >
               <CalendarPlus size={13} />
-              Schedule appointment
+              {t('provider_schedule_appointment')}
             </button>
           </div>
         ) : (
@@ -677,12 +692,12 @@ export default function ProviderDashboard() {
                     style={{
                       background: '#D4537E', color: '#fff', border: 'none',
                       padding: '6px 12px', borderRadius: 8,
-                      fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer',
                       fontFamily: "'DM Sans', system-ui, sans-serif", flexShrink: 0,
                     }}
                     onClick={() => startVisitFor(a.patient)}
                   >
-                    Start visit
+                    {t('provider_start_visit')}
                   </button>
                   {renderApptActions(a.id)}
                 </div>
@@ -694,14 +709,14 @@ export default function ProviderDashboard() {
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 background: 'rgba(212,83,126,0.1)', color: '#D4537E',
                 border: '1px solid #D4537E', padding: '7px 14px',
-                borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                borderRadius: 10, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
                 fontFamily: "'DM Sans', system-ui, sans-serif",
                 marginTop: 10, marginBottom: 4,
               }}
               onClick={() => setAncOpen(true)}
             >
               <CalendarPlus size={13} />
-              Schedule appointment
+              {t('provider_schedule_appointment')}
             </button>
           </>
         )}
@@ -713,12 +728,12 @@ export default function ProviderDashboard() {
         style={{ borderLeft: '3px solid #D4537E', animationDelay: '150ms' }}
       >
         <div className="provider-section-header">
-          <h2>Upcoming appointments</h2>
+          <h2>{t('provider_upcoming_appointments')}</h2>
           <span className="badge" aria-live="polite">{laterAppts.length}</span>
         </div>
 
         {laterAppts.length === 0 ? (
-          <p className="provider-empty">No appointments scheduled beyond today.</p>
+          <p className="provider-empty">{t('provider_no_appointments_upcoming')}</p>
         ) : (
           laterAppts.map(a => (
             <div
@@ -743,34 +758,68 @@ export default function ProviderDashboard() {
         )}
       </section>
 
+      {/* ── Completed appointments (attended / missed / cancelled) ── */}
+      <section
+        className="provider-section pv-fade-up"
+        style={{ borderLeft: '3px solid var(--pv-text-muted)', animationDelay: '160ms' }}
+      >
+        <div className="provider-section-header">
+          <h2>{t('provider_completed_appointments')}</h2>
+          <span className="badge" aria-live="polite">{pastAppts.length}</span>
+        </div>
+
+        {pastAppts.length === 0 ? (
+          <p className="provider-empty">{t('provider_no_appointments_completed')}</p>
+        ) : (
+          pastAppts.map(a => (
+            <div
+              key={a.id}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.06)', gap: 10,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p className="alert-patient">{a.patient_name}</p>
+                <p className="alert-meta">
+                  {a.visit_type_display} · {a.appointment_date} at {a.appointment_time}
+                  {a.hospital_name ? ` · ${a.hospital_name}` : ''}
+                </p>
+              </div>
+              <span style={apptStatusBadge(a.status)}>{statusLabel(a.status as 'attended' | 'missed' | 'cancelled')}</span>
+            </div>
+          ))
+        )}
+      </section>
+
       {/* ── FIX 6 + FIX 7: Compact chat queue bar ── */}
       <div
         className="pv-fade-up"
         style={{
           borderRadius: 14, padding: '10px 14px', marginBottom: 14,
-          background: chatQueue.length > 0 ? 'rgba(212,83,126,0.06)' : '#fff',
-          border: chatQueue.length > 0 ? '1px solid #D4537E' : '0.5px solid rgba(0,0,0,0.08)',
+          background: chatQueue.length > 0 ? 'rgba(212,83,126,0.06)' : 'var(--pv-card)',
+          border: chatQueue.length > 0 ? '1px solid #D4537E' : '0.5px solid var(--pv-border)',
           borderLeft: '3px solid #1D9E75',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           gap: 10, animationDelay: '200ms',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <MessageSquare size={14} style={{ color: chatQueue.length > 0 ? '#D4537E' : '#9ca3af', flexShrink: 0 }} />
+          <MessageSquare size={14} style={{ color: chatQueue.length > 0 ? '#D4537E' : 'var(--pv-text-muted)', flexShrink: 0 }} />
           {chatQueue.length > 0 ? (
             <div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: '#1c1c1e', margin: 0 }}>
-                {chatQueue.length} waiting
+              <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--pv-text)', margin: 0 }}>
+                {t('provider_chats_waiting', { count: chatQueue.length })}
               </p>
               {oldestChat && (
-                <p style={{ fontSize: 10, color: '#6b6b70', margin: 0 }}>
-                  Oldest: {timeAgo(oldestChat.escalated_at || oldestChat.updated_at)}
+                <p style={{ fontSize: '0.625rem', color: 'var(--pv-text-muted)', margin: 0 }}>
+                  {t('provider_chats_oldest', { time: timeAgo(oldestChat.escalated_at || oldestChat.updated_at) })}
                 </p>
               )}
             </div>
           ) : (
-            <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>
-              No escalated chats. Bot is handling everything.
+            <p style={{ fontSize: '0.75rem', color: 'var(--pv-text-muted)', margin: 0 }}>
+              {t('provider_no_escalated_chats')}
             </p>
           )}
         </div>
@@ -780,13 +829,13 @@ export default function ProviderDashboard() {
             style={{
               background: '#D4537E', color: '#fff', border: 'none',
               padding: '6px 12px', borderRadius: 8,
-              fontSize: 11, fontWeight: 700, cursor: 'pointer',
+              fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer',
               fontFamily: "'DM Sans', system-ui, sans-serif",
               flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4,
             }}
             onClick={() => nav('/provider/chats')}
           >
-            View queue <ChevronRight size={12} />
+            {t('provider_view_queue')} <ChevronRight size={12} />
           </button>
         )}
       </div>
@@ -802,7 +851,7 @@ export default function ProviderDashboard() {
           style={{
             background: '#D4537E', color: '#fff', border: 'none',
             padding: '12px 22px', borderRadius: 999,
-            fontWeight: 700, fontSize: 13,
+            fontWeight: 700, fontSize: '0.8125rem',
             display: 'flex', alignItems: 'center', gap: 8,
             cursor: ancOpen ? 'not-allowed' : 'pointer',
             opacity: ancOpen ? 0.8 : 1,
@@ -813,14 +862,14 @@ export default function ProviderDashboard() {
           disabled={ancOpen}
         >
           {ancOpen ? (
-            <><Loader2 size={15} className="provider-spin" /> Recording…</>
+            <><Loader2 size={15} className="provider-spin" /> {t('provider_recording')}</>
           ) : (
-            <><Stethoscope size={15} /> Record ANC visit</>
+            <><Stethoscope size={15} /> {t('provider_record_anc_visit')}</>
           )}
         </button>
         {!ancOpen && (
-          <span style={{ fontSize: 9, color: '#9ca3af', letterSpacing: '0.06em', fontWeight: 600 }}>
-            Press R
+          <span style={{ fontSize: '0.5625rem', color: 'var(--pv-text-muted)', letterSpacing: '0.06em', fontWeight: 600 }}>
+            {t('provider_press_r')}
           </span>
         )}
       </div>

@@ -1,13 +1,15 @@
 import { createContext, useContext, useState, useEffect } from "react"
 import type { ReactNode } from 'react'
+import axios from 'axios'
 import api from '../api/client'
+import { setAccessToken } from '../api/tokenStore'
 
 interface User {
   id: number
   full_name: string
   phone_number: string
   email?: string | null
-  user_type: 'patient' | 'partner' | 'provider' | 'hospital_manager' | string
+  user_type: 'patient' | 'provider' | string
   is_verified: boolean
   is_onboarded: boolean
   hospital_id?: number | null
@@ -32,30 +34,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      api.get('/auth/me/')
-          .then(r => setUser(r.data))
-          .catch(() => {
-            localStorage.clear()
-          })
-          .finally(() => setIsLoading(false))
-    } else {
-      setIsLoading(false)
-    }
+    // The access token only ever lives in memory, so a page reload loses it.
+    // Recover a session by exchanging the httpOnly refresh cookie (if any).
+    // Must bypass `api`'s 401-retry interceptor: a visitor with no cookie
+    // yet is an expected 401 here, not a mid-session expiry — going through
+    // `api` would make the interceptor "retry" this exact call, also get
+    // 401, and force a redirect to '/', which remounts this effect and
+    // loops forever.
+    axios.post(
+      `${import.meta.env.VITE_API_URL}/auth/token/refresh/`, {}, { withCredentials: true }
+    )
+        .then(r => {
+          setAccessToken(r.data.access)
+          return api.get('/auth/me/')
+        })
+        .then(r => setUser(r.data))
+        .catch(() => {
+          setAccessToken(null)
+        })
+        .finally(() => setIsLoading(false))
   }, [])
 
   const login = async (phone_number: string, password: string) => {
     const { data } = await api.post('/auth/login/', { phone_number, password })
-    localStorage.setItem('access_token', data.access)
-    localStorage.setItem('refresh_token', data.refresh)
+    setAccessToken(data.access)
     setUser(data.user)
   }
 
   const register = async (formData: any) => {
     const { data } = await api.post('/auth/register/', formData)
-    if (data.access) localStorage.setItem('access_token', data.access)
-    if (data.refresh) localStorage.setItem('refresh_token', data.refresh)
+    setAccessToken(data.access)
     setUser(data.user)
   }
 
@@ -69,13 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
-    const refresh = localStorage.getItem('refresh_token')
-    if (refresh) {
-      // Best-effort — blacklist the token server-side so it can't be reused
-      api.post('/auth/logout/', { refresh }).catch(() => {})
-    }
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
+    // Best-effort — blacklist the token server-side so it can't be reused.
+    // The refresh token travels via the httpOnly cookie, not the body.
+    api.post('/auth/logout/').catch(() => {})
+    setAccessToken(null)
     setUser(null)
   }
 
@@ -88,6 +93,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function dashboardPathFor(userType?: string) {
   if (userType === 'provider') return '/provider/dashboard'
-  if (userType === 'hospital_manager') return '/manager/dashboard'
   return '/home'
 }

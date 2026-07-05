@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import api from '../../api/client'
+import { setAccessToken } from '../../api/tokenStore'
 import { useTranslation } from 'react-i18next'
 import './OnboardingFlow.css'
 import './auth.css'
@@ -32,7 +33,7 @@ interface SymptomEntry {
   severity: 'mild' | 'moderate' | 'severe';
 }
 
-type SignupRole = 'patient' | 'provider' | 'hospital_manager'
+type SignupRole = 'patient' | 'provider'
 
 interface FormData {
   full_name: string; date_of_birth: string; phone_number: string; password: string
@@ -184,8 +185,7 @@ export default function OnboardingFlow() {
       }
 
       const { data: regData } = await api.post('/auth/register/', payload)
-      localStorage.setItem('access_token', regData.access)
-      localStorage.setItem('refresh_token', regData.refresh)
+      setAccessToken(regData.access)
 
       let finalUser = regData.user
 
@@ -217,8 +217,6 @@ export default function OnboardingFlow() {
 
       if (form.user_type === 'provider') {
         nav('/provider/dashboard')
-      } else if (form.user_type === 'hospital_manager') {
-        nav('/manager/dashboard')
       } else {
         nav('/home')
       }
@@ -348,11 +346,10 @@ export default function OnboardingFlow() {
                 <div className="ob-field-group">
                   <div>
                     <label className="field-label">I am signing up as</label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       {([
                         { v: 'patient', label: 'Mother' },
                         { v: 'provider', label: 'Provider' },
-                        { v: 'hospital_manager', label: 'Manager' },
                       ] as { v: SignupRole; label: string }[]).map(r => (
                         <button
                           key={r.v}

@@ -6,7 +6,7 @@ from .models import TipCategory, Tip, Bookmark
 from .serializers import TipCategorySerializer, TipSerializer
 from django.db.models import Q
 
-MANAGEMENT_ROLES = {'hospital_manager', 'admin'}
+MANAGEMENT_ROLES = {'provider', 'admin'}
 
 
 def _is_manager_or_admin(user) -> bool:
@@ -20,7 +20,7 @@ def tip_list(request):
     """
     Get list of tips with advanced filtering.
     Patient-facing GETs only return tips that are approved AND reviewed.
-    Managers / admins see every tip so they can approve drafts.
+    Providers / admins see every tip so they can approve drafts.
     """
     tips = Tip.objects.all()
     if not _is_manager_or_admin(request.user):

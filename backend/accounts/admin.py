@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
-from .models import User, ProviderProfile, OTPCode, PartnerLink
+from .models import User, ProviderProfile, OTPCode
 
 # Custom forms for UserAdmin to handle phone_number instead of username
 class UserAdminCreationForm(UserCreationForm):
@@ -57,11 +57,3 @@ class OTPCodeAdmin(admin.ModelAdmin):
     list_filter = ('is_used',)
     search_fields = ('user__full_name', 'user__phone_number', 'code')
     readonly_fields = ('created_at',)
-
-@admin.register(PartnerLink)
-class PartnerLinkAdmin(admin.ModelAdmin):
-    list_display = ('patient', 'partner', 'invitation_code', 'is_confirmed', 'created_at')
-    list_filter = ('is_confirmed',)
-    search_fields = ('patient__full_name', 'partner__full_name', 'invitation_code')
-    readonly_fields = ('created_at',)
-    raw_id_fields = ('patient', 'partner')

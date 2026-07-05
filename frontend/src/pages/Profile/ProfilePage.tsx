@@ -3,12 +3,10 @@ import {
   Baby,
   Bell,
   ChevronRight,
-  Eye,
   Languages,
   Loader2,
   LogOut,
   Stethoscope,
-  UserPlus,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import PageWrapper from '../../components/layout/PageWrapper'
@@ -152,20 +150,6 @@ export default function ProfilePage() {
   const NOTIFICATIONS_KEY = 'notifications'
 
   const menuItems = [
-    {
-      key: 'invite-partner',
-      icon: UserPlus,
-      label: t('profile_invite_partner'),
-      sub: t('profile_invite_partner_sub'),
-      action: () => nav('/profile/partner'),
-    },
-    {
-      key: 'partner-view',
-      icon: Eye,
-      label: t('profile_partner_view'),
-      sub: t('profile_partner_view_sub'),
-      action: () => nav('/profile/partner'),
-    },
     {
       key: 'language',
       icon: Languages,

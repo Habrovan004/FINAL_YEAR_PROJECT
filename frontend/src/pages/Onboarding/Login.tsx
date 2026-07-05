@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Eye, EyeOff, Loader2, Baby, Stethoscope, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Loader2, Baby, Stethoscope } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
+import { setAccessToken } from '../../api/tokenStore'
 import { useAuth } from '../../context/AuthContext'
 import './auth.css'
 
@@ -16,12 +17,11 @@ interface AxiosError {
   }
 }
 
-type LoginRole = 'patient' | 'provider' | 'hospital_manager'
+type LoginRole = 'patient' | 'provider'
 
 const ROLES: { id: LoginRole; labelKey: string; Icon: typeof Baby }[] = [
   { id: 'patient', labelKey: 'role_mama', Icon: Baby },
   { id: 'provider', labelKey: 'role_provider', Icon: Stethoscope },
-  { id: 'hospital_manager', labelKey: 'role_manager', Icon: ShieldCheck },
 ]
 
 /**
@@ -78,8 +78,7 @@ export default function Login() {
         phone_number: normalized,
         password: form.password,
       })
-      localStorage.setItem('access_token', data.access)
-      localStorage.setItem('refresh_token', data.refresh)
+      setAccessToken(data.access)
       setUser(data.user)
 
       // Role-based redirect — backend `user_type` wins over the on-page selector.
@@ -88,8 +87,6 @@ export default function Login() {
 
       if (userType === 'provider') {
         nav('/provider/dashboard')
-      } else if (userType === 'hospital_manager') {
-        nav('/manager/dashboard')
       } else if (!isOnboarded) {
         nav('/onboarding/hospital')
       } else {

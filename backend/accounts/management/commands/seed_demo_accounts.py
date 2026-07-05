@@ -1,4 +1,4 @@
-"""Seed/refresh demo provider and hospital-manager accounts with known credentials.
+"""Seed/refresh demo provider accounts with known credentials.
 
 Run:
     python manage.py seed_demo_accounts
@@ -9,7 +9,7 @@ ensures the profile row + hospital link exist.
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from accounts.models import User, ProviderProfile, HospitalManagerProfile
+from accounts.models import User, ProviderProfile
 from hospitals.models import Hospital
 from patients.models import PatientProfile
 
@@ -20,15 +20,11 @@ DEMO_MOTHER_PASSWORD = 'Mama123!'
 DEMO_PROVIDER_PHONE = '+255700111222'
 DEMO_PROVIDER_PASSWORD = 'Provider123!'
 
-DEMO_MANAGER_PHONE = '+255700333444'
-DEMO_MANAGER_PASSWORD = 'Manager123!'
-
 
 class Command(BaseCommand):
     help = (
-        'Create or refresh demo provider and hospital-manager accounts so the '
-        'frontend login flow can be exercised end-to-end without going through '
-        'OTP signup.'
+        'Create or refresh a demo provider account so the frontend login flow '
+        'can be exercised end-to-end without going through OTP signup.'
     )
 
     @transaction.atomic
@@ -59,18 +55,6 @@ class Command(BaseCommand):
             defaults={'hospital': hospital, 'specialization': 'nurse', 'is_available': True},
         )
 
-        manager_user = self._upsert_user(
-            phone=DEMO_MANAGER_PHONE,
-            full_name='Demo Manager',
-            password=DEMO_MANAGER_PASSWORD,
-            user_type='hospital_manager',
-            email='demo.manager@example.test',
-        )
-        HospitalManagerProfile.objects.update_or_create(
-            user=manager_user,
-            defaults={'hospital': hospital},
-        )
-
         mother_user = self._upsert_user(
             phone=DEMO_MOTHER_PHONE,
             full_name='Demo Mama',
@@ -98,7 +82,6 @@ class Command(BaseCommand):
             f'"{hospital.name}"):\n'
             f'  Mama     ->phone: {DEMO_MOTHER_PHONE}     password: {DEMO_MOTHER_PASSWORD}\n'
             f'  Provider ->phone: {DEMO_PROVIDER_PHONE}   password: {DEMO_PROVIDER_PASSWORD}\n'
-            f'  Manager  ->phone: {DEMO_MANAGER_PHONE}    password: {DEMO_MANAGER_PASSWORD}\n'
             f'  Wired {reassigned} patient(s) at "{hospital.name}" to the demo provider.\n'
         ))
 

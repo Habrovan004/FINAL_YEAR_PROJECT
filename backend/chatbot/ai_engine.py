@@ -22,6 +22,7 @@ from typing import Iterable, Optional
 
 from django.conf import settings
 
+from clinical.models import DANGER_SIGN_KEYWORDS
 from services import gemini_service
 
 logger = logging.getLogger(__name__)
@@ -183,6 +184,29 @@ def _fallback(language_hint: str, *, reason: str) -> dict:
     return {"escalate": False, "reason": reason, "bot_reply": msg, "ai_available": False}
 
 
+def _keyword_escalation(text: str) -> Optional[str]:
+    """Rule-based safety net, independent of the Gemini call's outcome.
+
+    Reuses the same WHO-aligned danger-sign keyword list that
+    ``clinical.models.ANCVisit.evaluate_risk()`` matches against, so a
+    mother describing a real emergency still gets flagged for provider
+    escalation even if the AI call is slow, errors, or (for any reason)
+    doesn't flag it itself.
+    """
+    lowered = (text or "").lower()
+    for keyword in DANGER_SIGN_KEYWORDS:
+        if keyword in lowered:
+            return keyword
+    return None
+
+
+def _apply_keyword_safety_net(result: dict, keyword_hit: Optional[str]) -> dict:
+    if keyword_hit and not result.get("escalate"):
+        result["escalate"] = True
+        result["reason"] = keyword_hit
+    return result
+
+
 def _parse_structured_reply(raw_text: str) -> Optional[dict]:
     """Decode the JSON object Gemini returns. Returns None on bad payloads."""
     if not raw_text:
@@ -230,8 +254,15 @@ def process_message(
     if not text:
         return _fallback(language_hint, reason="empty_message")
 
+    # Independent of everything below: if AI is unreachable, times out, or
+    # returns garbage, a mother describing a real danger sign must still be
+    # escalated to her provider.
+    keyword_hit = _keyword_escalation(text)
+
     if not gemini_service.is_available():
-        return _fallback(language_hint, reason="ai_unavailable")
+        return _apply_keyword_safety_net(
+            _fallback(language_hint, reason="ai_unavailable"), keyword_hit
+        )
 
     history_list = list(history or [])
     history_limit = getattr(settings, "AI_CHAT_HISTORY_LIMIT", 20)
@@ -261,12 +292,16 @@ def process_message(
 
     if not raw_text:
         # gemini_service already logged the underlying error.
-        return _fallback(language_hint, reason="ai_api_error")
+        return _apply_keyword_safety_net(
+            _fallback(language_hint, reason="ai_api_error"), keyword_hit
+        )
 
     data = _parse_structured_reply(raw_text)
     if not data or not (data.get("reply") or "").strip():
         logger.warning("Gemini returned non-JSON or empty reply: %r", raw_text[:200])
-        return _fallback(language_hint, reason="ai_bad_payload")
+        return _apply_keyword_safety_net(
+            _fallback(language_hint, reason="ai_bad_payload"), keyword_hit
+        )
 
     reply_text = data["reply"].strip()
     escalate = bool(data.get("escalate", False))
@@ -279,9 +314,9 @@ def process_message(
         escalate, reason, reply_text[:120],
     )
 
-    return {
+    return _apply_keyword_safety_net({
         "escalate": escalate,
         "reason": reason,
         "bot_reply": reply_text,
         "ai_available": True,
-    }
+    }, keyword_hit)

@@ -5,7 +5,7 @@ import {
   Bell, ChevronRight, Loader2,
   Heart, Calendar, PhoneCall,
   Droplets, Apple, ShieldCheck,
-  Leaf, BookOpen, Users, AlertTriangle, MessageCircle,
+  Leaf, BookOpen, AlertTriangle, MessageCircle,
 } from 'lucide-react'
 import PageWrapper from '../../components/layout/PageWrapper'
 import api from '../../api/client'
@@ -151,14 +151,6 @@ export default function HomePage() {
       desc: t('learn_baby_desc'),
       to: '/baby-growth',
       tone: 'pink',
-    },
-    {
-      icon: Users,
-      label: t('learn_together_label'),
-      title: t('learn_together_title'),
-      desc: t('learn_together_desc'),
-      to: '/profile/partner',
-      tone: 'purple',
     },
   ]
 

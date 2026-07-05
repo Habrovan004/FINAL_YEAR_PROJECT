@@ -34,7 +34,24 @@
       "Bash(npm --version)",
       "Bash(where psql *)",
       "Bash(psql --version)",
-      "Bash(sc query *)"
+      "Bash(sc query *)",
+      "Bash(python3 -c \"import json; print\\(json.load\\(open\\('/tmp/refresh_body.json'\\)\\)['access']\\)\")",
+      "Read(//tmp/**)",
+      "Bash(pkill -f \"runserver 8124\")",
+      "Bash(DJANGO_SETTINGS_MODULE=config.settings_verify_temp python manage.py runserver 8125)",
+      "Bash(taskkill //F //FI \"IMAGENAME eq python.exe\")",
+      "Bash(DJANGO_SETTINGS_MODULE=config.settings_verify_temp python manage.py shell -c ' *)",
+      "Bash(DJANGO_SETTINGS_MODULE=config.settings_dev_sqlite python manage.py seed_demo_accounts)",
+      "Bash(npm init *)",
+      "Bash(npm install *)",
+      "Bash(node drive.mjs)",
+      "Bash(node drive2.mjs)",
+      "Bash(netstat -ano)",
+      "Bash(disown)",
+      "Bash(DJANGO_SETTINGS_MODULE=config.settings_dev_sqlite DEBUG=False python manage.py collectstatic --noinput)",
+      "Bash(DJANGO_SETTINGS_MODULE=config.settings_dev_sqlite DEBUG=False ALLOWED_HOSTS=localhost,127.0.0.1 python manage.py runserver 8300)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Users/_H.A.G.A.I_/AppData/Local/**)"
     ]
   }
 }

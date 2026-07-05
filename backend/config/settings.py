@@ -1,12 +1,18 @@
 from pathlib import Path
 from datetime import timedelta
 from decouple import config
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
+
+# Render (and most PaaS) sit behind a reverse proxy that terminates TLS and
+# forwards requests as plain HTTP — without this, Django thinks every
+# request is insecure and secure cookies/redirects misbehave.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 INSTALLED_APPS = [
@@ -39,6 +45,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', # MUST be at the top
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -67,16 +74,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
+# Render (and most PaaS providers) inject a single DATABASE_URL. Local dev
+# keeps using the individual DB_* vars already in backend/.env.
+_database_url = config('DATABASE_URL', default='')
+if _database_url:
+    DATABASES = {
+        'default': dj_database_url.parse(_database_url, conn_max_age=600, ssl_require=True)
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME'),
+            'USER': config('DB_USER'),
+            'PASSWORD': config('DB_PASSWORD'),
+            'HOST': config('DB_HOST', default='localhost'),
+            'PORT': config('DB_PORT', default='5432'),
+        }
+    }
 
 AUTH_USER_MODEL = 'accounts.User'
 
@@ -90,6 +105,15 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -110,7 +134,18 @@ if DEBUG:
         r"^http://localhost:\d+$",
         r"^http://127\.0\.0\.1:\d+$",
     ]
+# Production frontend origin(s) — e.g. https://your-app.vercel.app — comma
+# separated if there's more than one (a preview + a production domain).
+_extra_cors_origins = config('CORS_ALLOWED_ORIGINS', default='')
+if _extra_cors_origins:
+    CORS_ALLOWED_ORIGINS += [o.strip() for o in _extra_cors_origins.split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
+
+# Needed for Django admin (session+CSRF auth) to accept POSTs once the app
+# is served from a Render domain instead of localhost.
+CSRF_TRUSTED_ORIGINS = [
+    o for o in config('CSRF_TRUSTED_ORIGINS', default='').split(',') if o.strip()
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -143,7 +178,13 @@ SIMPLE_JWT = {
 # response body, so JS (and thus XSS) never has access to it. The access
 # token still goes in the JSON body — the frontend keeps it in memory only.
 AUTH_COOKIE = 'refresh_token'
-AUTH_COOKIE_SAMESITE = 'Strict'
+# 'Strict' works for local dev (frontend + backend both on localhost, so
+# same-site). Render + Vercel are DIFFERENT registrable domains, so the
+# cookie must be set to AUTH_COOKIE_SAMESITE=None in that environment or the
+# browser will silently refuse to send it on cross-site requests, breaking
+# login/refresh entirely. SameSite=None requires Secure, which is already
+# forced on by AUTH_COOKIE_SECURE below whenever DEBUG=False.
+AUTH_COOKIE_SAMESITE = config('AUTH_COOKIE_SAMESITE', default='Strict')
 AUTH_COOKIE_SECURE = config('AUTH_COOKIE_SECURE', default=not DEBUG, cast=bool)
 
 # ── Auth throttling ─────────────────────────────────────────────────────────

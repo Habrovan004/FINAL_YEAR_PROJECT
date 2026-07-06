@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from .models import Appointment
 from .serializers import AppointmentSerializer
+from patients.models import PatientProfile
 from datetime import date
 from django.db import IntegrityError
 
@@ -12,9 +13,47 @@ from django.db import IntegrityError
 def appointment_list(request):
     """
     POST: Book an appointment. Verifies provider availability.
+      - Patient caller: books with their own assigned provider.
+      - Provider caller: books directly for one of their own patients
+        (payload must include `patient_id`).
     GET: Fetch user appointments.
     """
     if request.method == 'POST':
+        if request.user.user_type == 'provider':
+            provider_profile = getattr(request.user, 'provider_profile', None)
+            if not provider_profile:
+                return Response({'error': 'Provider profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+            patient_id = request.data.get('patient_id')
+            if not patient_id:
+                return Response({'error': 'patient_id is required.'}, status=400)
+
+            patient_profile = PatientProfile.objects.filter(
+                user_id=patient_id, assigned_provider=provider_profile
+            ).select_related('user').first()
+            if not patient_profile:
+                return Response({'error': 'This patient is not assigned to you.'}, status=status.HTTP_403_FORBIDDEN)
+
+            data = request.data.copy()
+            data['provider'] = request.user.id
+            data['hospital'] = provider_profile.hospital_id
+
+            serializer = AppointmentSerializer(data=data)
+            if serializer.is_valid():
+                try:
+                    date_val = serializer.validated_data['appointment_date']
+                    time_val = serializer.validated_data['appointment_time']
+
+                    if Appointment.objects.filter(provider=request.user, appointment_date=date_val, appointment_time=time_val).exists():
+                        return Response({'error': 'You already have an appointment booked at this time.'}, status=status.HTTP_409_CONFLICT)
+
+                    serializer.save(user=patient_profile.user, provider=request.user)
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                except IntegrityError:
+                    return Response({'error': 'Double booking error. Please select another time.'}, status=400)
+
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
         # Get patient's assigned provider automatically
         assigned_provider = None
         if hasattr(request.user, 'profile') and request.user.profile.assigned_provider:

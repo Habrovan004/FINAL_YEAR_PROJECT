@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useContext, useState, useEffect, useRef } from "react"
 import type { ReactNode } from 'react'
 import axios from 'axios'
 import api from '../api/client'
@@ -34,6 +34,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    // React.StrictMode double-invokes effects in dev, which would otherwise
+    // fire this refresh call twice concurrently — both requests reuse the
+    // same (not-yet-rotated) refresh-token cookie and race each other to
+    // rotate/blacklist it server-side, occasionally surfacing as a 500.
+    let cancelled = false
+
     // The access token only ever lives in memory, so a page reload loses it.
     // Recover a session by exchanging the httpOnly refresh cookie (if any).
     // Must bypass `api`'s 401-retry interceptor: a visitor with no cookie
@@ -45,14 +51,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       `${import.meta.env.VITE_API_URL}/auth/token/refresh/`, {}, { withCredentials: true }
     )
         .then(r => {
+          if (cancelled) return
           setAccessToken(r.data.access)
-          return api.get('/auth/me/')
+          return api.get('/auth/me/').then(res => setUser(res.data))
         })
-        .then(r => setUser(r.data))
         .catch(() => {
-          setAccessToken(null)
+          if (!cancelled) setAccessToken(null)
         })
-        .finally(() => setIsLoading(false))
+        .finally(() => {
+          if (!cancelled) setIsLoading(false)
+        })
+
+    return () => { cancelled = true }
   }, [])
 
   const login = async (phone_number: string, password: string) => {

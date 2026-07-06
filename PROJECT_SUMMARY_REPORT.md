@@ -48,10 +48,11 @@ guidance — especially outside clinic hours. Uzazi Safe Link addresses this by:
 ```
 ┌─────────────────────────┐        HTTPS / REST (JSON)        ┌──────────────────────────┐
 │   React + TS Frontend   │ ─────────────────────────────────▶│  Django REST Framework    │
-│   (Vite dev server /    │◀───────────────────────────────── │  Backend API              │
-│    static build)        │        JWT Bearer auth             │                          │
+│   (Vercel static build) │◀───────────────────────────────── │  Backend API (Render)     │
+│                         │        JWT Bearer auth             │                          │
 └─────────────────────────┘                                    │  ┌────────────────────┐  │
-                                                                 │  │ SQLite (dev) DB    │  │
+                                                                 │  │ SQLite (dev) /     │  │
+                                                                 │  │ PostgreSQL (prod)  │  │
                                                                  │  └────────────────────┘  │
                                                                  │  ┌────────────────────┐  │
                                                                  │  │ Google Gemini API  │  │
@@ -76,6 +77,12 @@ commands, intended to be triggered by an external scheduler (cron / Windows Task
 Scheduler) rather than an in-process task queue — a pragmatic choice for a
 dissertation-scale deployment that avoids adding Celery/Redis infrastructure.
 
+**Deployment:** the frontend deploys to **Vercel** as a static SPA build (`frontend/vercel.json`
+rewrites all routes to `index.html` for client-side routing); the backend deploys to
+**Render** (`render.yaml`) as a `gunicorn`-served web service with a managed PostgreSQL
+database, `whitenoise` for static file serving, and all secrets (Gemini/SMS/SMTP keys,
+`SECRET_KEY`) injected as environment variables rather than committed to source.
+
 ---
 
 ## 4. Technology Stack
@@ -90,6 +97,9 @@ dissertation-scale deployment that avoids adding Celery/Redis infrastructure.
 | django-cors-headers | 4.9.0 | CORS handling for the separate frontend origin |
 | python-decouple | 3.8 | `.env`-based configuration/secrets management |
 | SQLite | — | Development database (`db.sqlite3`) |
+| PostgreSQL (via `dj-database-url` + `psycopg2-binary`) | 3.1.2 / 2.9.10 | Production database on Render, selected automatically when `DATABASE_URL` is set |
+| gunicorn | 26.0.0 | Production WSGI server (Render `startCommand`) |
+| whitenoise | 6.12.0 | Static file serving in production without a separate CDN/web server |
 | google-genai | 2.10.0 | Official Google Gemini SDK — powers the AI Health Assistant |
 | africastalking | 2.0.2 | SMS gateway SDK (OTP codes, appointment/medication reminders, emergency alerts) |
 | argon2-cffi | 25.1.0 | Password hashing backend |
@@ -151,7 +161,7 @@ by a `PrivateRoute` component and server-side by DRF permission classes tied to 
 | **accounts** | Custom `User` model (phone-based auth), `ProviderProfile`, `HospitalManagerProfile`, OTP codes, partner-linking, SMS/email OTP delivery, login/register/reset-password views |
 | **patients** | `PatientProfile` (pregnancy status, LMP/due date, weight/height, hospital, preferences), `BabyGrowth` (week-by-week fetal development content), `ANCMilestone` reference data, onboarding/skip-onboarding logic |
 | **hospitals** | `Hospital` model (name, type, geo-coordinates, services) with seed fixtures; location-based hospital search |
-| **appointments** | `Appointment` model (visit type, date/time, provider, hospital, status, reminder-sent flags); management commands for automated SMS reminders and "mark missed" sweeps |
+| **appointments** | `Appointment` model (visit type, date/time, provider, hospital, status, reminder-sent flags); bookable either by a **patient** (auto-resolves her own assigned provider) or directly by a **provider** on behalf of one of her own mothers (`ScheduleAppointmentModal` on the Provider Dashboard — the provider path validates the target patient is actually assigned to them before creating the row); double-booking is rejected at both the application and DB (`unique_together`) level; management commands handle automated SMS reminders and "mark missed" sweeps |
 | **tracking** | `MoodLog` (daily mood 1–5, symptoms, weight, baby kicks — one per user per day), `Symptom` reference list, `SymptomReport` with AI/rule-based risk scoring |
 | **clinical** | `ANCVisit` — the clinical record captured by a provider during an in-person visit (vitals, labs, obstetric exam), with a built-in **WHO-aligned automatic risk-assessment engine** (`evaluate_risk()`) and rule-based recommendation generator (`generate_recommendations()`) |
 | **tips** | `TipCategory` / `Tip` — bilingual educational content, filterable by trimester, with AI-generation + medical-review + manager-approval workflow before mothers can see it; `Bookmark` for saved tips |
@@ -575,7 +585,7 @@ state so re-running the command never double-sends.
 
 ## 11. Security & Auth
 
-- **JWT authentication** (access + refresh tokens) via `djangorestframework_simplejwt`; tokens stored client-side in `localStorage`.
+- **JWT authentication** (access + refresh tokens) via `djangorestframework_simplejwt`. The access token is kept **in memory only** (`frontend/src/api/tokenStore.ts`) — never written to `localStorage` — so it cannot be lifted by an XSS payload; the refresh token travels in an **httpOnly, SameSite cookie** the browser manages and JavaScript never sees. On a full page reload the in-memory access token is lost by design, and `AuthContext` silently exchanges the refresh cookie for a new one on app start.
 - **Phone-number-based login** with Argon2 password hashing (`argon2-cffi`).
 - **OTP verification** for registration/password-reset, delivered by SMS (Africa's Talking) and/or email (Gmail SMTP), with a 10-minute expiry window (`OTPCode.is_expired()`).
 - **CORS** explicitly configured (`django-cors-headers`) to allow only the known frontend origin.
@@ -632,7 +642,7 @@ Every route beyond the public onboarding/login/splash pages is wrapped in a
 | GET | `/api/patients/baby-growth/` | Weekly fetal development content |
 | GET | `/api/hospitals/?lat=&lng=` | Nearby hospitals |
 | GET/POST | `/api/tracking/` , `/api/tracking/timeline/` | Mood/symptom logs and 7-day history |
-| GET/POST | `/api/appointments/` | ANC appointments |
+| GET/POST | `/api/appointments/` | ANC appointments — patient self-booking (auto-resolves her assigned provider) or provider booking on behalf of an assigned patient (`patient_id` in payload) |
 | GET | `/api/tips/` , `/api/tips/categories/` , `/api/tips/saved/` | Educational content |
 | POST | `/api/tips/{id}/bookmark/` | Toggle saved tip |
 | POST | `/api/emergency/log/` | Log SOS action |
@@ -648,7 +658,7 @@ Every route beyond the public onboarding/login/splash pages is wrapped in a
 **Languages:** Python, TypeScript, JavaScript, HTML, CSS
 **Backend framework:** Django 4.2 + Django REST Framework
 **Frontend framework:** React 19 + Vite 8
-**Database:** SQLite (development)
+**Database:** SQLite (development), PostgreSQL (production, via Render)
 **Auth:** JWT (SimpleJWT) + Argon2 password hashing, phone-number identity
 **AI/ML:** Google Gemini (`gemini-2.5-flash`) via `google-genai` SDK
 **Messaging:** Africa's Talking (SMS), Gmail SMTP (email)
@@ -659,8 +669,9 @@ Every route beyond the public onboarding/login/splash pages is wrapped in a
 **Styling:** Tailwind CSS
 **Background jobs:** Django management commands (cron/Task-Scheduler-driven, no Celery)
 **Dev tooling:** ESLint, TypeScript compiler, pip/npm
+**Deployment:** Vercel (frontend static build), Render (backend + managed Postgres, via `render.yaml`)
 
 ---
 
 *This document was generated to support the dissertation write-up and reflects the
-codebase as of 2026-07-02.*
+codebase as of 2026-07-06.*

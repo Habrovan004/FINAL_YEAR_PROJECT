@@ -51,7 +51,8 @@
       "Bash(DJANGO_SETTINGS_MODULE=config.settings_dev_sqlite DEBUG=False python manage.py collectstatic --noinput)",
       "Bash(DJANGO_SETTINGS_MODULE=config.settings_dev_sqlite DEBUG=False ALLOWED_HOSTS=localhost,127.0.0.1 python manage.py runserver 8300)",
       "Read(//c/Program Files/**)",
-      "Read(//c/Users/_H.A.G.A.I_/AppData/Local/**)"
+      "Read(//c/Users/_H.A.G.A.I_/AppData/Local/**)",
+      "Bash(PGPASSWORD=postgres psql *)"
     ]
   }
 }

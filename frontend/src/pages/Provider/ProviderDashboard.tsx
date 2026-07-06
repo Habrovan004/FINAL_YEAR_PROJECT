@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { useTextSize } from '../../context/TextSizeContext'
 import ANCVisitModal, { type PatientRow, type ANCSaveResponse } from './ANCVisitModal'
+import ScheduleAppointmentModal, { type AppointmentSaveResponse } from './ScheduleAppointmentModal'
 import './provider.css'
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -250,6 +251,7 @@ export default function ProviderDashboard() {
 
   const [ancOpen, setAncOpen] = useState(false)
   const [ancPatients, setAncPatients] = useState<PatientRow[]>([])
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [todayCount, setTodayCount] = useState(0)
   const [toast, setToast] = useState<{ message: string } | null>(null)
 
@@ -339,6 +341,12 @@ export default function ProviderDashboard() {
     void load(true)
     setToast({ message: t('provider_ai_recorded_success') })
     if (res.risk_level === 'high') console.warn('HIGH RISK flagged:', res.risk_reasons)
+  }
+
+  const handleApptScheduled = (res: AppointmentSaveResponse) => {
+    setScheduleOpen(false)
+    void load(true)
+    setToast({ message: `Appointment scheduled with ${res.patient_name} on ${res.appointment_date}` })
   }
 
   const handleAcknowledge = (key: string) => {
@@ -666,7 +674,7 @@ export default function ProviderDashboard() {
                 borderRadius: 10, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
                 fontFamily: "'DM Sans', system-ui, sans-serif",
               }}
-              onClick={() => setAncOpen(true)}
+              onClick={() => setScheduleOpen(true)}
             >
               <CalendarPlus size={13} />
               {t('provider_schedule_appointment')}
@@ -713,7 +721,7 @@ export default function ProviderDashboard() {
                 fontFamily: "'DM Sans', system-ui, sans-serif",
                 marginTop: 10, marginBottom: 4,
               }}
-              onClick={() => setAncOpen(true)}
+              onClick={() => setScheduleOpen(true)}
             >
               <CalendarPlus size={13} />
               {t('provider_schedule_appointment')}
@@ -880,6 +888,13 @@ export default function ProviderDashboard() {
         patients={ancPatients}
         onClose={() => { setAncOpen(false); setAncPatients(patients) }}
         onSaved={handleSaved}
+      />
+
+      <ScheduleAppointmentModal
+        open={scheduleOpen}
+        patients={patients}
+        onClose={() => setScheduleOpen(false)}
+        onSaved={handleApptScheduled}
       />
 
       {selectedPatient && (

@@ -129,8 +129,10 @@ function PatientPanel({
   patientId, patientName, onClose,
 }: { patientId: number; patientName: string; onClose: () => void }) {
   const { t } = useTranslation()
+  const nav = useNavigate()
   const [detail, setDetail] = useState<PatientDetailData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [messaging, setMessaging] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -141,6 +143,16 @@ function PatientPanel({
   }, [patientId])
 
   const recentVisits = (detail?.visits ?? []).slice(0, 3)
+
+  const startDirectChat = async () => {
+    setMessaging(true)
+    try {
+      const res = await api.post('/chat/rooms/', { patient_id: patientId })
+      nav(`/provider/chats?room=${res.data.id}`)
+    } finally {
+      setMessaging(false)
+    }
+  }
 
   return (
     <div
@@ -194,6 +206,22 @@ function PatientPanel({
                 </div>
               ))}
             </div>
+
+            <button
+              type="button"
+              disabled={messaging}
+              onClick={() => void startDirectChat()}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                width: '100%', background: '#D4537E', color: '#fff', border: 'none',
+                padding: '10px 14px', borderRadius: 10, fontWeight: 700, fontSize: '0.75rem',
+                cursor: messaging ? 'not-allowed' : 'pointer', opacity: messaging ? 0.7 : 1,
+                fontFamily: "'DM Sans', system-ui, sans-serif", marginBottom: 16,
+              }}
+            >
+              {messaging ? <Loader2 size={14} className="provider-spin" /> : <MessageCircle size={14} />}
+              {t('provider_message_mother')}
+            </button>
 
             <p style={{ fontSize: '0.625rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#D4537E', fontWeight: 700, marginBottom: 10 }}>
               {t('provider_recent_anc_visits')}
@@ -340,7 +368,12 @@ export default function ProviderDashboard() {
     setAncPatients(patients)
     void load(true)
     setToast({ message: t('provider_ai_recorded_success') })
-    if (res.risk_level === 'high') console.warn('HIGH RISK flagged:', res.risk_reasons)
+    // High-risk saves jump straight to the patient's detail panel so the
+    // provider sees the risk reasons/recommendations immediately, instead of
+    // having to notice and click into the alerts list themselves.
+    if (res.risk_level === 'high') {
+      setSelectedPatient({ id: res.patient, name: res.patient_name })
+    }
   }
 
   const handleApptScheduled = (res: AppointmentSaveResponse) => {

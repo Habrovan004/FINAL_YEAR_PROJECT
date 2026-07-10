@@ -1,6 +1,7 @@
 import datetime
 
 from django.conf import settings
+from django.db import IntegrityError
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -51,6 +52,13 @@ class CookieTokenRefreshView(TokenRefreshView):
             serializer.is_valid(raise_exception=True)
         except TokenError as e:
             raise InvalidToken(e.args[0])
+        except IntegrityError:
+            # Two concurrent refresh calls (e.g. a duplicate request from the
+            # client, or two open tabs) can both try to blacklist the same
+            # outstanding token; the loser hits a unique-constraint violation
+            # rather than a clean TokenError. Treat it the same as an invalid
+            # token instead of surfacing a raw 500.
+            return Response({'error': 'Refresh token already used.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         validated = dict(serializer.validated_data)
         rotated_refresh = validated.pop('refresh', None)

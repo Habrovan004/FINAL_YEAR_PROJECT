@@ -1,8 +1,15 @@
-import { createContext, useContext, useState, useEffect, useRef } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 import type { ReactNode } from 'react'
 import axios from 'axios'
 import api from '../api/client'
 import { setAccessToken } from '../api/tokenStore'
+
+// Session-bootstrap refresh is idempotent per page load — cache the in-flight
+// promise at module scope (not component state) so React.StrictMode's dev-only
+// double-invoke of this effect reuses the same request instead of firing a
+// second concurrent POST with the same not-yet-rotated refresh cookie, which
+// would otherwise race the first request to rotate/blacklist it server-side.
+let bootstrapRefresh: Promise<{ data: { access: string } }> | null = null
 
 interface User {
   id: number
@@ -34,10 +41,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // React.StrictMode double-invokes effects in dev, which would otherwise
-    // fire this refresh call twice concurrently — both requests reuse the
-    // same (not-yet-rotated) refresh-token cookie and race each other to
-    // rotate/blacklist it server-side, occasionally surfacing as a 500.
     let cancelled = false
 
     // The access token only ever lives in memory, so a page reload loses it.
@@ -47,9 +50,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // `api` would make the interceptor "retry" this exact call, also get
     // 401, and force a redirect to '/', which remounts this effect and
     // loops forever.
-    axios.post(
-      `${import.meta.env.VITE_API_URL}/auth/token/refresh/`, {}, { withCredentials: true }
-    )
+    if (!bootstrapRefresh) {
+      bootstrapRefresh = axios.post(
+        `${import.meta.env.VITE_API_URL}/auth/token/refresh/`, {}, { withCredentials: true }
+      )
+    }
+
+    bootstrapRefresh
         .then(r => {
           if (cancelled) return
           setAccessToken(r.data.access)

@@ -164,8 +164,8 @@ by a `PrivateRoute` component and server-side by DRF permission classes tied to 
 | **appointments** | `Appointment` model (visit type, date/time, provider, hospital, status, reminder-sent flags); bookable either by a **patient** (auto-resolves her own assigned provider) or directly by a **provider** on behalf of one of her own mothers (`ScheduleAppointmentModal` on the Provider Dashboard — the provider path validates the target patient is actually assigned to them before creating the row); double-booking is rejected at both the application and DB (`unique_together`) level; management commands handle automated SMS reminders and "mark missed" sweeps |
 | **tracking** | `MoodLog` (daily mood 1–5, symptoms, weight, baby kicks — one per user per day), `Symptom` reference list, `SymptomReport` with AI/rule-based risk scoring |
 | **clinical** | `ANCVisit` — the clinical record captured by a provider during an in-person visit (vitals, labs, obstetric exam), with a built-in **WHO-aligned automatic risk-assessment engine** (`evaluate_risk()`) and rule-based recommendation generator (`generate_recommendations()`) |
-| **tips** | `TipCategory` / `Tip` — bilingual educational content, filterable by trimester, with AI-generation + medical-review + manager-approval workflow before mothers can see it; `Bookmark` for saved tips |
-| **chat** | Direct **mother ↔ provider** messaging: `ChatRoom`, `Message`, and a `VideoConsultation` model (video-call session tracking) |
+| **tips** | `TipCategory` / `Tip` — bilingual educational content, filterable by trimester, with AI-generation + medical-review + manager-approval workflow before mothers can see it; `Bookmark` for saved tips. The patient-facing Learn page actually reads from a separate top-level `backend/learn_views.py` (`GET/POST /api/learn/articles/`), which serves the same `Tip` rows filtered by `is_approved`. Its six category tabs (What to Do / What to Avoid / Warning Signs / Hormonal Changes / Birth Prep / Nutrition & Food) are matched **client-side** against each tip's title/type text, not a DB relation — `tips/management/commands/seed_tips.py` seeds 24 bilingual, pre-approved tips (4 per category) with titles written to match those tabs |
+| **chat** | Direct **mother ↔ provider** messaging: `ChatRoom`, `Message`, and a `VideoConsultation` model (video-call session tracking). Wired into the UI on both sides — a provider starts a thread from a patient's profile panel on the dashboard, and can browse/reply to all their direct threads from a "Direct" tab in `ProviderChatQueue.tsx`; mothers see the same thread under a "My Provider" tab in `ChatPage.tsx`, alongside the AI Assistant tab |
 | **chatbot** | AI Health Assistant: `Conversation` + `Message` (new Gemini-driven schema) plus a legacy `ChatSession`/`BotMessage` state-machine kept for backward compatibility; auto-escalates a chatbot conversation to a live provider when needed |
 | **emergency** | One-tap SOS: `EmergencyContact`, `EmergencyLog` (action taken, GPS coordinates, SMS-sent flag, which provider was notified), bilingual `EmergencyInstruction` content |
 | **medication** | `Prescription` (issued by a provider) and `MedicationReminder` (scheduled SMS dose reminders with delivery-status tracking) |
@@ -182,7 +182,7 @@ by a `PrivateRoute` component and server-side by DRF permission classes tied to 
 - **Hospital** *(hospitals)* — name, type (public/private/maternity), services, geo-coordinates.
 - **Appointment** *(appointments)* — patient, provider, hospital, visit type, date/time, status, 48h/2h SMS reminder flags; unique constraint prevents double-booking a provider's slot.
 - **MoodLog** *(tracking)* — one row per user per calendar day (`unique_together`), mood score, symptom list, optional weight/baby-kicks.
-- **ANCVisit** *(clinical)* — the richest clinical model: BP, weight, fundal height, fetal heart rate, urine protein/glucose, hemoglobin, blood group, HIV/syphilis status, free-text symptoms/notes, and **auto-computed** `risk_level` + `risk_reasons` (via WHO-aligned thresholds) + `recommendations`, recalculated on every save unless a provider manually overrides the risk level.
+- **ANCVisit** *(clinical)* — the richest clinical model: BP, weight, fundal height, fetal heart rate, urine protein/glucose, hemoglobin, blood group, HIV/syphilis status, free-text symptoms/notes, and **auto-computed** `risk_level` + `risk_reasons` (via WHO-aligned thresholds) + `recommendations`, recalculated on every save unless a provider manually overrides the risk level. Its provider-facing form (`ANCVisitModal.tsx`) surfaces a visible banner naming the missing required Vitals fields (patient, weight, BP, gestational age) when a save is blocked, rather than silently scrolling back to the Vitals tab with no explanation.
 - **Conversation / Message** *(chatbot)* — Gemini-backed chat thread that can flip from `type='chatbot'` to `type='provider'` on escalation, preserving full history across the switch.
 - **ChatRoom / Message / VideoConsultation** *(chat)* — direct provider messaging, separate from the AI chatbot thread.
 - **Prescription / MedicationReminder** *(medication)* — dosage/frequency/duration plus scheduled SMS reminders with acknowledgement tracking.
@@ -585,7 +585,7 @@ state so re-running the command never double-sends.
 
 ## 11. Security & Auth
 
-- **JWT authentication** (access + refresh tokens) via `djangorestframework_simplejwt`. The access token is kept **in memory only** (`frontend/src/api/tokenStore.ts`) — never written to `localStorage` — so it cannot be lifted by an XSS payload; the refresh token travels in an **httpOnly, SameSite cookie** the browser manages and JavaScript never sees. On a full page reload the in-memory access token is lost by design, and `AuthContext` silently exchanges the refresh cookie for a new one on app start.
+- **JWT authentication** (access + refresh tokens) via `djangorestframework_simplejwt`, with rotation and blacklist-after-rotation enabled. The access token is kept **in memory only** (`frontend/src/api/tokenStore.ts`) — never written to `localStorage` — so it cannot be lifted by an XSS payload; the refresh token travels in an **httpOnly, SameSite cookie** the browser manages and JavaScript never sees. On a full page reload the in-memory access token is lost by design, and `AuthContext` silently exchanges the refresh cookie for a new one on app start; that bootstrap request is cached at module scope so React StrictMode's dev-only double-effect can't fire it twice concurrently, and `CookieTokenRefreshView` also treats a losing concurrent rotation as a clean 401 rather than an unhandled `IntegrityError`.
 - **Phone-number-based login** with Argon2 password hashing (`argon2-cffi`).
 - **OTP verification** for registration/password-reset, delivered by SMS (Africa's Talking) and/or email (Gmail SMTP), with a 10-minute expiry window (`OTPCode.is_expired()`).
 - **CORS** explicitly configured (`django-cors-headers`) to allow only the known frontend origin.
@@ -643,10 +643,11 @@ Every route beyond the public onboarding/login/splash pages is wrapped in a
 | GET | `/api/hospitals/?lat=&lng=` | Nearby hospitals |
 | GET/POST | `/api/tracking/` , `/api/tracking/timeline/` | Mood/symptom logs and 7-day history |
 | GET/POST | `/api/appointments/` | ANC appointments — patient self-booking (auto-resolves her assigned provider) or provider booking on behalf of an assigned patient (`patient_id` in payload) |
-| GET | `/api/tips/` , `/api/tips/categories/` , `/api/tips/saved/` | Educational content |
+| GET | `/api/tips/` , `/api/tips/categories/` , `/api/tips/saved/` | Educational content (management/bookmark surface) |
+| GET/POST | `/api/learn/articles/` | Canonical patient-facing Learn feed the frontend actually reads (same `Tip` rows, filtered by `?trimester=`) |
 | POST | `/api/tips/{id}/bookmark/` | Toggle saved tip |
 | POST | `/api/emergency/log/` | Log SOS action |
-| GET/POST | `/api/chat/rooms/` , `/api/chat/rooms/<id>/messages/` | Provider ↔ patient direct chat |
+| GET/POST | `/api/chat/rooms/` , `/api/chat/rooms/<id>/messages/` , `/api/chat/rooms/<id>/mark-read/` | Provider ↔ patient direct chat — provider-initiated, wired into `ProviderChatQueue.tsx` ("Direct" tab) and `ChatPage.tsx` ("My Provider" tab) |
 | GET | `/api/chatbot/status/` | AI availability probe |
 
 *(Full endpoint list in `README.md`.)*

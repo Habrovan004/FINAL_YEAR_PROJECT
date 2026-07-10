@@ -148,11 +148,24 @@ export default function LearnPage() {
   }, [fetchArticles, tab, loading])
 
   const toggleBookmark = async (id: number) => {
+    // The backend's bookmark endpoint is add-only on POST and remove-only on
+    // DELETE — it doesn't actually "toggle" server-side, so the caller has
+    // to know the current state and pick the right method.
+    const current =
+      trimesterArticles.find(a => a.id === id)
+      ?? generalArticles.find(a => a.id === id)
+      ?? savedArticles.find(a => a.id === id)
+    const isBookmarked = current?.is_bookmarked ?? false
+
     try {
-      await api.post(`/tips/${id}/bookmark/`)
+      if (isBookmarked) {
+        await api.delete(`/tips/${id}/bookmark/`)
+      } else {
+        await api.post(`/tips/${id}/bookmark/`)
+      }
       void fetchSavedArticles()
       const flip = (xs: Article[]) =>
-        xs.map(a => a.id === id ? { ...a, is_bookmarked: !a.is_bookmarked } : a)
+        xs.map(a => a.id === id ? { ...a, is_bookmarked: !isBookmarked } : a)
       setTrimesterArticles(flip)
       setGeneralArticles(flip)
     } catch (e) {

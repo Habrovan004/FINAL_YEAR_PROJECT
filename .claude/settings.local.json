@@ -4,7 +4,19 @@
       "Skill(run)",
       "Bash(python manage.py runserver)",
       "Bash(curl -s -X POST http://127.0.0.1:8000/api/auth/login/ -H \"Content-Type: application/json\" -d '{\"phone_number\":\"+255700111222\",\"password\":\"Provider123!\"}')",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('patients/views.py'\\).read\\(\\)\\); ast.parse\\(open\\('tracking/serializers.py'\\).read\\(\\)\\); print\\('OK: both files parse'\\)\")",
+      "Bash(npx tsc *)",
+      "Bash(tee /tmp_backend_run.log)",
+      "Bash(curl -s -o /dev/null -w \"backend status: %{http_code}\\\\n\" http://127.0.0.1:8000/admin/)",
+      "Bash(tasklist)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(curl -s http://127.0.0.1:8000/api/chatbot/status/)",
+      "Bash(curl -s -o /dev/null -w \"dashboard \\(no auth\\) status: %{http_code}\\\\n\" http://127.0.0.1:8000/api/patients/dashboard/)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/auth/login/ -H 'Content-Type: application/json' -d '{\"phone_number\": \"+255700000001\", \"password\": \"Demo1234\"}')",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/api/auth/login/ -H 'Content-Type: application/json' -d '{\"phone_number\": \"+255700000002\", \"password\": \"Demo1234\"}')",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

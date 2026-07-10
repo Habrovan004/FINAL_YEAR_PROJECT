@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { AuthProvider, useAuth, dashboardPathFor } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import { TextSizeProvider, useTextSize } from './context/TextSizeContext'
+import api from './api/client'
 
 // Global styles
 import 'leaflet/dist/leaflet.css'
@@ -70,6 +71,7 @@ function GlobalControls() {
   const { dark, toggle } = useTheme()
   const { textSize, cycleTextSize } = useTextSize()
   const { i18n } = useTranslation()
+  const { user } = useAuth()
   const location = useLocation()
   const activeLanguage = i18n.language?.startsWith('sw') ? 'sw' : 'en'
   const sizeLabel = textSize === 'small' ? 'S' : textSize === 'large' ? 'L' : 'M'
@@ -85,6 +87,12 @@ function GlobalControls() {
   const toggleLanguage = () => {
     const nextLanguage = activeLanguage === 'sw' ? 'en' : 'sw'
     void i18n.changeLanguage(nextLanguage)
+    // Keep the backend preference (shown on the Profile/Settings pages) in
+    // sync with whatever's actually on screen — only patients have a
+    // PatientProfile, so scope this to avoid get_or_create-ing one for a provider.
+    if (user?.user_type === 'patient') {
+      api.patch('/patients/profile/', { language: nextLanguage }).catch(() => {})
+    }
   }
 
   return (

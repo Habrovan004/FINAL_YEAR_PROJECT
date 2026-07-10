@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Loader2, Moon } from 'lucide-react'
 import api from '../../api/client'
 import { useTextSize } from '../../context/TextSizeContext'
@@ -39,6 +40,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 
 export default function PreferencesPage() {
     const nav = useNavigate()
+    const { t, i18n } = useTranslation()
     const { setTextSize } = useTextSize()
 
     const [preferences, setPreferences] = useState<UserPreferences>({
@@ -59,14 +61,16 @@ export default function PreferencesPage() {
                 const response = await api.get('/patients/profile/')
                 if (!mounted) return
                 const fontSize = response.data.font_size || 'medium'
+                const language = response.data.language || 'sw'
                 setPreferences(prev => ({
                     ...prev,
-                    language:               response.data.language               || 'sw',
+                    language,
                     font_size:              fontSize,
                     notifications_enabled:  response.data.notifications_enabled !== false,
                     audio_guidance:         response.data.audio_guidance === true,
                 }))
                 setTextSize(fontSize)
+                void i18n.changeLanguage(language)
             } catch (e) {
                 console.error('Error fetching preferences:', e)
             } finally {
@@ -81,13 +85,14 @@ export default function PreferencesPage() {
         const updated = { ...preferences, [key]: value }
         setPreferences(updated)
         if (key === 'font_size') setTextSize(value as UserPreferences['font_size'])
+        if (key === 'language') void i18n.changeLanguage(value as string)
         setSaving(true)
         setError('')
         try {
             await api.patch('/patients/profile/', { [key]: value })
         } catch (e) {
             console.error('Error saving preference:', e)
-            setError('Hiswi ya kuokoa mapendeleo yako')
+            setError(t('prefs_error_save'))
             setPreferences(preferences)
         } finally {
             setSaving(false)
@@ -103,7 +108,7 @@ export default function PreferencesPage() {
             nav('/home')
         } catch (e) {
             console.error('Error saving preferences:', e)
-            setError('Hiswi ya kumalizia mapendeleo')
+            setError(t('prefs_error_continue'))
         } finally {
             setSaving(false)
         }
@@ -163,13 +168,13 @@ export default function PreferencesPage() {
                 {/* ── Step + Title ── */}
                 <div style={{ padding: '20px 0 0' }}>
                     <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase', color: ACCENT_PINK, margin: '0 0 6px' }}>
-                        Hatua 7 ya 8
+                        {t('prefs_step_indicator')}
                     </p>
                     <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 24, fontWeight: 600, color: '#fff', margin: '0 0 4px' }}>
-                        Mapendeleo yako
+                        {t('preferences_title')}
                     </h1>
                     <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', margin: 0 }}>
-                        Binafsisha matumizi yako ya app.
+                        {t('preferences_sub')}
                     </p>
                 </div>
 
@@ -186,7 +191,7 @@ export default function PreferencesPage() {
                     <div style={{ background: SUBTLE_BG, border: `0.5px solid ${SUBTLE_BORDER}`, borderRadius: 16, overflow: 'hidden' }}>
                         <div style={{ padding: '14px 16px 0' }}>
                             <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', margin: '0 0 12px' }}>
-                                Taarifa
+                                {t('prefs_notifications_header')}
                             </p>
                         </div>
 
@@ -194,8 +199,8 @@ export default function PreferencesPage() {
                         <div style={{ padding: '0 16px 14px', borderBottom: `0.5px solid ${SUBTLE_BORDER}` }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                                 <div style={{ flex: 1 }}>
-                                    <p style={{ fontSize: 13, fontWeight: 500, color: '#fff', margin: '0 0 2px' }}>Vidokezo vya wiki</p>
-                                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Pokea ushauri wa ujauzito kila wiki</p>
+                                    <p style={{ fontSize: 13, fontWeight: 500, color: '#fff', margin: '0 0 2px' }}>{t('prefs_weekly_tips')}</p>
+                                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{t('prefs_weekly_tips_sub')}</p>
                                 </div>
                                 <Toggle on={preferences.notifications_enabled} onToggle={() => updatePreference('notifications_enabled', !preferences.notifications_enabled)} />
                             </div>
@@ -205,8 +210,8 @@ export default function PreferencesPage() {
                         <div style={{ padding: '14px 16px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                                 <div style={{ flex: 1 }}>
-                                    <p style={{ fontSize: 13, fontWeight: 500, color: '#fff', margin: '0 0 2px' }}>Maelekezo ya Sauti</p>
-                                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>Jifunze kupitia sauti</p>
+                                    <p style={{ fontSize: 13, fontWeight: 500, color: '#fff', margin: '0 0 2px' }}>{t('audio_guidance')}</p>
+                                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', margin: 0 }}>{t('prefs_audio_sub')}</p>
                                 </div>
                                 <Toggle on={preferences.audio_guidance} onToggle={() => updatePreference('audio_guidance', !preferences.audio_guidance)} />
                             </div>
@@ -216,13 +221,13 @@ export default function PreferencesPage() {
                     {/* ── Box 2: Font Size ── */}
                     <div style={{ background: SUBTLE_BG, border: `0.5px solid ${SUBTLE_BORDER}`, borderRadius: 16, padding: '14px 16px' }}>
                         <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', margin: '0 0 12px' }}>
-                            Ukubwa wa Maandishi
+                            {t('font_size')}
                         </p>
                         <div style={{ display: 'flex', gap: 8 }}>
                             {([
-                                { key: 'small',  label: 'S', name: 'Ndogo',  size: 11 },
-                                { key: 'medium', label: 'M', name: 'Kati',   size: 14 },
-                                { key: 'large',  label: 'L', name: 'Kubwa',  size: 17 },
+                                { key: 'small',  label: 'S', name: t('small'),  size: 11 },
+                                { key: 'medium', label: 'M', name: t('medium'), size: 14 },
+                                { key: 'large',  label: 'L', name: t('large'),  size: 17 },
                             ] as const).map(item => {
                                 const active = preferences.font_size === item.key
                                 return (
@@ -247,7 +252,7 @@ export default function PreferencesPage() {
                     {/* ── Box 3: Language ── */}
                     <div style={{ background: SUBTLE_BG, border: `0.5px solid ${SUBTLE_BORDER}`, borderRadius: 16, padding: '14px 16px' }}>
                         <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', margin: '0 0 12px' }}>
-                            Lugha
+                            {t('prefs_language_header')}
                         </p>
                         <div style={{ display: 'flex', gap: 8 }}>
                             {([
@@ -293,17 +298,17 @@ export default function PreferencesPage() {
                     {saving ? (
                         <>
                             <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                            Inakukamata...
+                            {t('prefs_button_saving')}
                         </>
                     ) : (
-                        'Endelea →'
+                        `${t('prefs_continue')} →`
                     )}
                 </button>
 
                 {/* Saving indicator */}
                 {saving && (
                     <p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 10 }}>
-                        Inakuokoa mapendeleo yako...
+                        {t('prefs_saving_indicator')}
                     </p>
                 )}
 

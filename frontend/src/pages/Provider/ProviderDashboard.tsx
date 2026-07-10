@@ -970,21 +970,21 @@ export default function ProviderDashboard() {
             </p>
           )}
         </div>
-        {chatQueue.length > 0 && (
-          <button
-            type="button"
-            style={{
-              background: '#D4537E', color: '#fff', border: 'none',
-              padding: '6px 12px', borderRadius: 8,
-              fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer',
-              fontFamily: "'DM Sans', system-ui, sans-serif",
-              flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4,
-            }}
-            onClick={() => nav('/provider/chats')}
-          >
-            {t('provider_view_queue')} <ChevronRight size={12} />
-          </button>
-        )}
+        <button
+          type="button"
+          style={{
+            background: chatQueue.length > 0 ? '#D4537E' : 'transparent',
+            color: chatQueue.length > 0 ? '#fff' : '#D4537E',
+            border: chatQueue.length > 0 ? 'none' : '1px solid #D4537E',
+            padding: '6px 12px', borderRadius: 8,
+            fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer',
+            fontFamily: "'DM Sans', system-ui, sans-serif",
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4,
+          }}
+          onClick={() => nav('/provider/chats')}
+        >
+          {chatQueue.length > 0 ? t('provider_view_queue') : t('provider_open_chats')} <ChevronRight size={12} />
+        </button>
       </div>
 
       {/* ── FIX 5: Record ANC visit FAB ── */}

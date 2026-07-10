@@ -50,7 +50,7 @@ interface AppointmentRow {
   visit_type_display: string
   appointment_date: string
   appointment_time: string
-  status: 'upcoming' | 'attended' | 'missed' | 'cancelled'
+  status: 'requested' | 'upcoming' | 'attended' | 'missed' | 'cancelled'
   hospital_name: string | null
   notes: string
 }
@@ -285,7 +285,11 @@ export default function ProviderDashboard() {
 
   const [upcomingAppts, setUpcomingAppts] = useState<AppointmentRow[]>([])
   const [pastAppts, setPastAppts] = useState<AppointmentRow[]>([])
+  const [requestedAppts, setRequestedAppts] = useState<AppointmentRow[]>([])
   const [actioningApptId, setActioningApptId] = useState<number | null>(null)
+  const [proposingApptId, setProposingApptId] = useState<number | null>(null)
+  const [proposeDate, setProposeDate] = useState('')
+  const [proposeTime, setProposeTime] = useState('')
 
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<Set<string>>(new Set())
   const [fadingAlerts, setFadingAlerts] = useState<Set<string>>(new Set())
@@ -318,12 +322,13 @@ export default function ProviderDashboard() {
     if (!silent) setLoading(true)
     setErr('')
     try {
-      const [dash, queue, pats, appts, history] = await Promise.all([
+      const [dash, queue, pats, appts, history, requested] = await Promise.all([
         api.get<DashboardPayload>('/auth/provider/dashboard/'),
         api.get<ChatQueueRow[]>('/chatbot/provider/queue/'),
         api.get<PatientRow[]>('/patients/'),
         api.get<AppointmentRow[]>('/appointments/?filter=upcoming'),
         api.get<AppointmentRow[]>('/appointments/?filter=history'),
+        api.get<AppointmentRow[]>('/appointments/?filter=requested'),
       ])
       setData(dash.data)
       setChatQueue(queue.data)
@@ -332,6 +337,7 @@ export default function ProviderDashboard() {
       setTodayCount(dash.data?.appointments?.today?.length ?? 0)
       setUpcomingAppts(appts.data)
       setPastAppts(history.data.slice().reverse())
+      setRequestedAppts(requested.data)
     } catch (e) {
       setErr(extractApiError(e, t('provider_failed_to_load')))
     } finally {
@@ -396,17 +402,37 @@ export default function ProviderDashboard() {
     setAncOpen(true)
   }
 
-  const statusLabel = (status: 'attended' | 'missed' | 'cancelled') =>
-    status === 'attended' ? t('provider_status_attended')
+  const statusLabel = (status: 'requested' | 'upcoming' | 'attended' | 'missed' | 'cancelled') =>
+    status === 'requested' ? t('provider_status_requested')
+      : status === 'upcoming' ? t('provider_status_confirmed')
+      : status === 'attended' ? t('provider_status_attended')
       : status === 'missed' ? t('provider_status_missed')
       : t('provider_status_cancelled')
 
-  const respondToAppointment = async (id: number, newStatus: 'attended' | 'missed' | 'cancelled') => {
+  const respondToAppointment = async (id: number, newStatus: 'upcoming' | 'attended' | 'missed' | 'cancelled') => {
     setActioningApptId(id)
     try {
       await api.patch(`/appointments/${id}/`, { status: newStatus })
       setUpcomingAppts(prev => prev.filter(a => a.id !== id))
+      setRequestedAppts(prev => prev.filter(a => a.id !== id))
       setToast({ message: t('provider_appt_marked', { status: statusLabel(newStatus) }) })
+      void load(true)
+    } catch (e) {
+      setToast({ message: extractApiError(e, t('provider_appt_update_failed')) })
+    } finally {
+      setActioningApptId(null)
+    }
+  }
+
+  const proposeNewTime = async (id: number) => {
+    if (!proposeDate || !proposeTime) return
+    setActioningApptId(id)
+    try {
+      await api.patch(`/appointments/${id}/`, { appointment_date: proposeDate, appointment_time: proposeTime })
+      setToast({ message: t('provider_time_proposed') })
+      setProposingApptId(null)
+      setProposeDate('')
+      setProposeTime('')
       void load(true)
     } catch (e) {
       setToast({ message: extractApiError(e, t('provider_appt_update_failed')) })
@@ -446,7 +472,7 @@ export default function ProviderDashboard() {
 
   const todaysAppts = data?.appointments.today ?? []
   const todayIso = new Date().toISOString().slice(0, 10)
-  const laterAppts = upcomingAppts.filter(a => a.appointment_date !== todayIso)
+  const laterAppts = upcomingAppts.filter(a => a.appointment_date !== todayIso && a.status === 'upcoming')
   const allAlerts = data?.critical_alerts ?? []
   const alerts = allAlerts.filter(a => !acknowledgedAlerts.has(`${a.type}-${a.id}`))
 
@@ -684,6 +710,86 @@ export default function ProviderDashboard() {
           )
         })}
       </section>
+
+      {/* ── Pending appointment requests — mother-initiated, awaiting the provider's confirm/decline/propose-new-time ── */}
+      {requestedAppts.length > 0 && (
+        <section
+          className="provider-section pv-fade-up"
+          style={{ borderLeft: '3px solid #F59E0B', animationDelay: '130ms' }}
+        >
+          <div className="provider-section-header">
+            <h2>{t('provider_pending_requests')}</h2>
+            <span className="badge" aria-live="polite">{requestedAppts.length}</span>
+          </div>
+
+          {requestedAppts.map(a => {
+            const busy = actioningApptId === a.id
+            const proposing = proposingApptId === a.id
+            return (
+              <div
+                key={a.id}
+                style={{ padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p className="alert-patient">{a.patient_name}</p>
+                    <p className="alert-meta">
+                      {a.visit_type_display} · {a.appointment_date} at {a.appointment_time}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(29,158,117,0.12)', '#1D9E75'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(a.id, 'upcoming')}>
+                      {t('provider_confirm_request')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      style={{ ...apptActionBtn('rgba(0,0,0,0.06)', 'var(--pv-text)'), opacity: busy ? 0.5 : 1 }}
+                      onClick={() => {
+                        setProposingApptId(proposing ? null : a.id)
+                        setProposeDate(a.appointment_date)
+                        setProposeTime(a.appointment_time)
+                      }}
+                    >
+                      {t('provider_propose_new_time')}
+                    </button>
+                    <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(212,83,126,0.1)', '#D4537E'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(a.id, 'cancelled')}>
+                      {t('provider_decline_request')}
+                    </button>
+                  </div>
+                </div>
+
+                {proposing && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                    <input
+                      type="date"
+                      className="field-input"
+                      value={proposeDate}
+                      onChange={e => setProposeDate(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <input
+                      type="time"
+                      className="field-input"
+                      value={proposeTime}
+                      onChange={e => setProposeTime(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      disabled={busy || !proposeDate || !proposeTime}
+                      style={{ ...apptActionBtn('#D4537E', '#fff'), opacity: busy ? 0.5 : 1 }}
+                      onClick={() => void proposeNewTime(a.id)}
+                    >
+                      {t('provider_send_proposal')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </section>
+      )}
 
       {/* ── FIX 4 + FIX 7: Today's appointments ── */}
       <section

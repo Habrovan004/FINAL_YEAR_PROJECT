@@ -23,9 +23,15 @@ interface Msg {
 
 interface RoomRow {
   id: number
+  patient: number
   patient_name: string
   last_message: { text: string; sender_id: number; created_at: string } | null
   unread_count: number
+}
+
+interface AssignedPatient {
+  id: number
+  full_name: string
 }
 
 interface DirectMessage {
@@ -59,6 +65,9 @@ export default function ProviderChatQueue() {
   // ── Direct messages (chat app) ──
   const [rooms, setRooms] = useState<RoomRow[]>([])
   const [loadingRooms, setLoadingRooms] = useState(true)
+  const [patients, setPatients] = useState<AssignedPatient[]>([])
+  const [loadingPatients, setLoadingPatients] = useState(true)
+  const [startingChatFor, setStartingChatFor] = useState<number | null>(null)
   const [activeRoom, setActiveRoom] = useState<number | null>(queryRoom ? parseInt(queryRoom) : null)
   const [roomMessages, setRoomMessages] = useState<DirectMessage[]>([])
   const [roomText, setRoomText] = useState('')
@@ -123,7 +132,38 @@ export default function ProviderChatQueue() {
     }
   }
 
-  useEffect(() => { if (tab === 'direct') void loadRooms() }, [tab])
+  const loadPatients = async () => {
+    try {
+      const r = await api.get<AssignedPatient[]>('/patients/')
+      setPatients(r.data)
+    } finally {
+      setLoadingPatients(false)
+    }
+  }
+
+  useEffect(() => {
+    if (tab === 'direct') {
+      void loadRooms()
+      void loadPatients()
+    }
+  }, [tab])
+
+  // Assigned patients with no existing room yet — the provider can message
+  // any of them without waiting for the patient to reach out first.
+  const patientsWithoutRoom = patients.filter(p => !rooms.some(r => r.patient === p.id))
+
+  const startChat = async (patientId: number) => {
+    setStartingChatFor(patientId)
+    try {
+      const r = await api.post<RoomRow>('/chat/rooms/', { patient_id: patientId })
+      setRooms(prev => [r.data, ...prev.filter(x => x.id !== r.data.id)])
+      setActiveRoom(r.data.id)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setStartingChatFor(null)
+    }
+  }
 
   useEffect(() => {
     if (activeRoom == null) return
@@ -326,21 +366,44 @@ export default function ProviderChatQueue() {
             </button>
           ))
         ) : (
-          loadingRooms ? (
+          loadingRooms || loadingPatients ? (
             <div className="flex justify-center py-6"><Loader2 className="animate-spin text-rose-400" /></div>
-          ) : rooms.length === 0 ? (
-            <p className="provider-empty">No direct conversations yet. Start one from a patient's profile.</p>
-          ) : rooms.map(r => (
-            <button key={r.id} className="chat-row" onClick={() => setActiveRoom(r.id)}>
-              <div className="chat-row-body">
-                <p className="alert-patient">{r.patient_name}</p>
-                <p className="alert-meta" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {r.last_message?.text || 'No messages yet'}
-                </p>
-              </div>
-              {r.unread_count > 0 && <span className="badge-red">{r.unread_count}</span>}
-            </button>
-          ))
+          ) : rooms.length === 0 && patientsWithoutRoom.length === 0 ? (
+            <p className="provider-empty">You have no assigned patients yet.</p>
+          ) : (
+            <>
+              {rooms.map(r => (
+                <button key={r.id} className="chat-row" onClick={() => setActiveRoom(r.id)}>
+                  <div className="chat-row-body">
+                    <p className="alert-patient">{r.patient_name}</p>
+                    <p className="alert-meta" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.last_message?.text || 'No messages yet'}
+                    </p>
+                  </div>
+                  {r.unread_count > 0 && <span className="badge-red">{r.unread_count}</span>}
+                </button>
+              ))}
+              {patientsWithoutRoom.map(p => (
+                <div key={p.id} className="chat-row">
+                  <div className="chat-row-body">
+                    <p className="alert-patient">{p.full_name}</p>
+                    <p className="alert-meta">No conversation yet</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void startChat(p.id)}
+                    disabled={startingChatFor === p.id}
+                    style={{
+                      background: '#D4537E', color: '#fff', border: 'none', padding: '6px 12px',
+                      borderRadius: 8, fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+                    }}
+                  >
+                    {startingChatFor === p.id ? <Loader2 className="animate-spin" size={12} /> : 'Message'}
+                  </button>
+                </div>
+              ))}
+            </>
+          )
         )}
       </section>
     </div>

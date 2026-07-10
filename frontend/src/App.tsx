@@ -29,6 +29,7 @@ import PreferencesPage from './pages/Profile/PreferencesPage'
 import ChatPage from './pages/Chat/ChatPage'
 import ProviderDashboard from './pages/Provider/ProviderDashboard'
 import ProviderChatQueue from './pages/Provider/ProviderChatQueue'
+import NotificationBell from './components/layout/NotificationBell'
 import './App.css'
 
 const queryClient = new QueryClient()
@@ -168,6 +169,7 @@ function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
                 <GlobalControls />
+                <NotificationBell />
               </BrowserRouter>
             </AuthProvider>
           </TextSizeProvider>

@@ -60,6 +60,7 @@ export default function ChatPage() {
 
   const [mode, setMode] = useState<'ai' | 'direct'>('ai')
   const [room, setRoom] = useState<ChatRoomRow | null>(null)
+  const [noProviderAssigned, setNoProviderAssigned] = useState(false)
   const [roomLoading, setRoomLoading] = useState(true)
   const [roomMessages, setRoomMessages] = useState<DirectMessage[]>([])
   const [nextBefore, setNextBefore] = useState<number | null>(null)
@@ -152,20 +153,26 @@ export default function ChatPage() {
   }
 
   // ── Direct provider chat (separate from the AI thread above) ──
+  // A mother's room with her assigned provider is created (or fetched, if it
+  // already exists) the moment she opens this tab — no separate "start chat"
+  // step. If she has no assigned provider, the backend 400s with a
+  // recognizable error code and we show a distinct empty state for that.
   const loadRoom = async () => {
     setRoomLoading(true)
+    setNoProviderAssigned(false)
     try {
-      const r = await api.get<ChatRoomRow[]>('/chat/rooms/')
-      const active = r.data[0] || null
-      setRoom(active)
-      if (active) {
-        await api.post(`/chat/rooms/${active.id}/mark-read/`).catch(() => {})
-        const m = await api.get(`/chat/rooms/${active.id}/messages/`)
-        setRoomMessages(m.data.results || [])
-        setHasMoreOlder(Boolean(m.data.has_more))
-        setNextBefore(m.data.next_before ?? null)
+      const r = await api.post<ChatRoomRow>('/chat/rooms/')
+      setRoom(r.data)
+      await api.post(`/chat/rooms/${r.data.id}/mark-read/`).catch(() => {})
+      const m = await api.get(`/chat/rooms/${r.data.id}/messages/`)
+      setRoomMessages(m.data.results || [])
+      setHasMoreOlder(Boolean(m.data.has_more))
+      setNextBefore(m.data.next_before ?? null)
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      if (err.response?.data?.error === 'no_provider_assigned') {
+        setNoProviderAssigned(true)
       }
-    } catch {
       setRoom(null)
     } finally {
       setRoomLoading(false)
@@ -379,6 +386,10 @@ export default function ChatPage() {
               <div className="chat-loading" style={{ height: 200 }}>
                 <Loader2 className="chat-spin" size={24} />
               </div>
+            ) : noProviderAssigned ? (
+              <p className="provider-empty" style={{ padding: '24px 12px', textAlign: 'center' }}>
+                {t('chat_no_provider_assigned')}
+              </p>
             ) : !room ? (
               <p className="provider-empty" style={{ padding: '24px 12px', textAlign: 'center' }}>
                 {t('chat_no_room_yet')}
@@ -389,6 +400,11 @@ export default function ChatPage() {
                   <button type="button" className="chat-load-earlier" onClick={() => void loadOlderRoomMessages()}>
                     {t('chat_load_earlier')}
                   </button>
+                )}
+                {roomMessages.length === 0 && (
+                  <p className="provider-empty" style={{ padding: '24px 12px', textAlign: 'center' }}>
+                    {t('chat_start_conversation_hint')}
+                  </p>
                 )}
                 {roomMessages.map(m => (
                   <div key={m.id} className={`bubble-wrap ${m.is_own ? 'me' : 'other'}`}>
@@ -406,7 +422,7 @@ export default function ChatPage() {
             )}
           </main>
 
-          {room && (
+          {!noProviderAssigned && !roomLoading && (
             <footer className="chat-footer">
               <input
                 className="chat-input"

@@ -179,6 +179,10 @@ def provider_dashboard(request):
         provider=request.user,
         status='missed'
     )
+    requested_appts_count = Appointment.objects.filter(
+        provider=request.user,
+        status='requested'
+    ).count()
 
     symptom_alerts = SymptomReport.objects.filter(
         patient__profile__assigned_provider=provider_profile,
@@ -228,6 +232,7 @@ def provider_dashboard(request):
         'appointments': {
             'upcoming_count': upcoming_appts.count(),
             'missed_count': missed_appts.count(),
+            'requested_count': requested_appts_count,
             'today': [{
                 'id': a.id,
                 'patient': a.user.full_name,

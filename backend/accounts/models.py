@@ -1,8 +1,6 @@
-import random
 import string
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
-from django.utils import timezone
 
 class UserManager(BaseUserManager):
     def create_user(self, phone_number, password=None, **extra_fields):
@@ -61,23 +59,3 @@ class ProviderProfile(models.Model):
     def __str__(self):
         # Explicit type conversion to avoid IDE errors
         return "Provider: " + str(self.user.full_name)
-
-class OTPCode(models.Model):
-    objects = models.Manager()
-    
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otp_codes')
-    code = models.CharField(max_length=6)
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_used = models.BooleanField(default=False)
-
-    def is_expired(self):
-        now = timezone.now()
-        diff = now - self.created_at
-        return diff.total_seconds() > 600
-
-    @classmethod
-    def generate_for_user(cls, user):
-        # Delete all previous OTPs for this user first
-        cls.objects.filter(user=user).delete()
-        otp_code = str(random.randint(100000, 999999))
-        return cls.objects.create(user=user, code=otp_code)

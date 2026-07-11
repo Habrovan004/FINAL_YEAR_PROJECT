@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import F
-from .models import User, OTPCode, ProviderProfile
+from .models import User, ProviderProfile
 from patients.models import PatientProfile
 from hospitals.models import Hospital
 
@@ -153,8 +153,3 @@ class UserSerializer(serializers.ModelSerializer):
             except Hospital.DoesNotExist:
                 return None
         return None
-
-
-class VerifyOTPSerializer(serializers.Serializer):
-    phone_number = serializers.CharField()
-    code = serializers.CharField(max_length=6)

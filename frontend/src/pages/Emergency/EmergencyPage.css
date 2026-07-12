@@ -604,6 +604,8 @@
 .emg-quick-cta.ghost:hover { background: var(--bg-pink); }
 .emg-quick-cta.ghost:active { transform: scale(0.97); }
 
+.emg-quick-cta.full-width { width: 100%; }
+
 /* Visually more prominent call CTA when the SMS isn't confirmed sent */
 .emg-quick-cta.urgent { animation: emg-cta-pulse 1.7s ease-in-out infinite; }
 

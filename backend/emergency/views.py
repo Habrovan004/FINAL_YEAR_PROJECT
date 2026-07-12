@@ -45,6 +45,7 @@ def trigger_sos(request):
         'log_id': log.id,
         'is_sms_sent': log.is_sms_sent,
         'provider_name': provider.full_name if provider else "Emergency Center",
+        'provider_phone': provider.phone_number if provider else None,
         'instructions': [{
             'title': i.title,
             'text': i.text,

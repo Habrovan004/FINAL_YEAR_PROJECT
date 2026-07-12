@@ -50,8 +50,8 @@ interface QueuedAlert {
 // ── Constants ──────────────────────────────────────────────────────────────
 const LONG_PRESS_MS = 1500
 const QUEUE_KEY = 'pending_sos_alert'
-const TZ_EMERGENCY = '112'   // Tanzania universal emergency number
-const TZ_AMBULANCE = '112'
+const TZ_EMERGENCY = '112'   // Tanzania universal / ambulance emergency number
+const TZ_POLICE = '999'      // Tanzania Police Force — separate from 112
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const triggerHaptic = (pattern: number | number[] = 60) => {
@@ -87,6 +87,7 @@ export default function EmergencyPage() {
   const [sending, setSending] = useState(false)
   const [sosTriggered, setSosTriggered] = useState(false)
   const [providerName, setProviderName] = useState('')
+  const [providerPhone, setProviderPhone] = useState('')
   const [error, setError] = useState('')
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [queued, setQueued] = useState(false)
@@ -242,6 +243,7 @@ export default function EmergencyPage() {
     try {
       const res = await api.post('/emergency/trigger-sos/', payload)
       setProviderName(res.data?.provider_name || t('emergency_center_default'))
+      setProviderPhone(res.data?.provider_phone || '')
       setInstructions(res.data?.instructions || [])
       setSmsSent(Boolean(res.data?.is_sms_sent))
       setSosTriggered(true)
@@ -305,23 +307,29 @@ export default function EmergencyPage() {
     [contacts],
   )
 
+  // Personal contact / provider are kept as the most prominent call actions —
+  // 112 and 999 are national lines that aren't reliably tied to actual
+  // ambulance dispatch outside Dar es Salaam, so they're secondary/backup.
+  // Only promoted to primary styling if there's no personal option at all.
+  const hasPersonalContact = Boolean(primaryContact) || Boolean(providerPhone)
+
   // ── Quick contacts (police, ambulance, hospital, family) ────────────────
   const quickContacts = useMemo(() => {
     const list: { key: string; label: string; sublabel: string; tel: string; icon: typeof Phone; tone: 'red' | 'blue' | 'pink' }[] = [
       {
-        key: 'police',
-        label: t('police'),
+        key: 'ambulance',
+        label: t('ambulance'),
         sublabel: TZ_EMERGENCY,
         tel: TZ_EMERGENCY,
-        icon: Siren,
+        icon: Stethoscope,
         tone: 'red',
       },
       {
-        key: 'ambulance',
-        label: t('ambulance'),
-        sublabel: TZ_AMBULANCE,
-        tel: TZ_AMBULANCE,
-        icon: Stethoscope,
+        key: 'police',
+        label: t('police'),
+        sublabel: TZ_POLICE,
+        tel: TZ_POLICE,
+        icon: Siren,
         tone: 'red',
       },
     ]
@@ -404,30 +412,50 @@ export default function EmergencyPage() {
             )}
           </div>
 
+          {/* Most prominent: the mother's own contact / assigned provider — */}
+          {/* these are more reliably reachable than national lines outside Dar. */}
+          {hasPersonalContact && (
+            <div className="emg-quick-row">
+              {primaryContact && (
+                <a
+                  className={`emg-quick-cta primary ${ackKind === 'unsent' || ackKind === 'failed' ? 'urgent' : ''} ${ackKind === 'unsent' ? 'tone-amber-cta' : ackKind === 'failed' ? 'tone-error-cta' : ''}`}
+                  href={`tel:${primaryContact.phone_number}`}
+                >
+                  <Heart size={18} /> {t('call_primary_contact', { name: primaryContact.name })}
+                </a>
+              )}
+              {providerPhone && (
+                <a
+                  className={`emg-quick-cta primary ${ackKind === 'unsent' || ackKind === 'failed' ? 'urgent' : ''} ${ackKind === 'unsent' ? 'tone-amber-cta' : ackKind === 'failed' ? 'tone-error-cta' : ''}`}
+                  href={`tel:${providerPhone}`}
+                >
+                  <Stethoscope size={18} /> {t('call_provider', { name: providerName })}
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Secondary / backup: national lines, always available but not */}
+          {/* the first thing to reach for outside Dar es Salaam. */}
+          <h3 className="emg-section-label">{t('backup_numbers')}</h3>
           <div className="emg-quick-row">
             <a
-              className={`emg-quick-cta primary ${ackKind === 'unsent' || ackKind === 'failed' ? 'urgent' : ''} ${ackKind === 'unsent' ? 'tone-amber-cta' : ackKind === 'failed' ? 'tone-error-cta' : ''}`}
+              className={`emg-quick-cta ${hasPersonalContact ? 'ghost' : 'primary'} ${!hasPersonalContact && (ackKind === 'unsent' || ackKind === 'failed') ? 'urgent' : ''} ${!hasPersonalContact && ackKind === 'unsent' ? 'tone-amber-cta' : !hasPersonalContact && ackKind === 'failed' ? 'tone-error-cta' : ''}`}
               href={`tel:${TZ_EMERGENCY}`}
             >
               <Phone size={18} /> {t('call_emergency', { number: TZ_EMERGENCY })}
             </a>
-            <button className="emg-quick-cta ghost" onClick={shareLocation}>
-              <Share2 size={18} /> {t('share_location')}
-            </button>
+            <a
+              className={`emg-quick-cta ${hasPersonalContact ? 'ghost' : 'primary'} ${!hasPersonalContact && (ackKind === 'unsent' || ackKind === 'failed') ? 'urgent' : ''} ${!hasPersonalContact && ackKind === 'unsent' ? 'tone-amber-cta' : !hasPersonalContact && ackKind === 'failed' ? 'tone-error-cta' : ''}`}
+              href={`tel:${TZ_POLICE}`}
+            >
+              <Siren size={18} /> {t('call_police', { number: TZ_POLICE })}
+            </a>
           </div>
 
-          {primaryContact && (
-            <a className="emg-contact-card" href={`tel:${primaryContact.phone_number}`}>
-              <div className="emg-contact-icon"><Heart size={18} /></div>
-              <div className="emg-contact-body">
-                <p className="emg-contact-name">{t('call_primary_contact', { name: primaryContact.name })}</p>
-                <p className="emg-contact-meta">
-                  {primaryContact.relationship} · {primaryContact.phone_number}
-                </p>
-              </div>
-              <Phone size={16} className="emg-contact-arrow" />
-            </a>
-          )}
+          <button className="emg-quick-cta ghost full-width" onClick={shareLocation}>
+            <Share2 size={18} /> {t('share_location')}
+          </button>
 
           <h3 className="emg-section-label"><Info size={14} /> {t('immediate_instructions')}</h3>
           <div className="emg-instr-list">

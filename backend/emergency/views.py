@@ -34,15 +34,16 @@ def trigger_sos(request):
 
     # 3. Send Provider Notification (SMS via Africa's Talking)
     if provider and provider.phone_number:
-        send_sos_sms(provider.phone_number, request.user.full_name, lat, lng)
-        log.is_sms_sent = True
-        log.save()
+        log.is_sms_sent = send_sos_sms(provider.phone_number, request.user.full_name, lat, lng)
+        log.save(update_fields=['is_sms_sent'])
 
     # 4. Fetch Emergency Instructions
     instructions = EmergencyInstruction.objects.all()
 
     return Response({
         'status': 'alert_triggered',
+        'log_id': log.id,
+        'is_sms_sent': log.is_sms_sent,
         'provider_name': provider.full_name if provider else "Emergency Center",
         'instructions': [{
             'title': i.title,

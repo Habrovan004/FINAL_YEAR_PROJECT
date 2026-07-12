@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.db.models import F
-from .models import User, OTPCode, ProviderProfile
+from .models import User, ProviderProfile
 from patients.models import PatientProfile
 from hospitals.models import Hospital
 
@@ -71,11 +71,26 @@ class RegisterSerializer(serializers.ModelSerializer):
             valid_specs = {'obstetrician', 'midwife', 'nurse'}
             if specialization not in valid_specs:
                 specialization = 'nurse'
-            ProviderProfile.objects.create(
+            provider_profile = ProviderProfile.objects.create(
                 user=user,
                 hospital=hospital,
                 specialization=specialization,
             )
+            # Patients who chose this hospital before any provider was available
+            # there are left with assigned_provider=None forever otherwise — pick
+            # up unassigned patients at this hospital now, up to capacity.
+            capacity = provider_profile.max_workload - provider_profile.current_workload
+            if capacity > 0:
+                waiting = list(
+                    PatientProfile.objects.filter(hospital=hospital, assigned_provider__isnull=True)[:capacity]
+                )
+                if waiting:
+                    for p in waiting:
+                        p.assigned_provider = provider_profile
+                    PatientProfile.objects.bulk_update(waiting, ['assigned_provider'])
+                    ProviderProfile.objects.filter(pk=provider_profile.pk).update(
+                        current_workload=F('current_workload') + len(waiting)
+                    )
 
         return user
 
@@ -138,8 +153,3 @@ class UserSerializer(serializers.ModelSerializer):
             except Hospital.DoesNotExist:
                 return None
         return None
-
-
-class VerifyOTPSerializer(serializers.Serializer):
-    phone_number = serializers.CharField()
-    code = serializers.CharField(max_length=6)

@@ -62,22 +62,30 @@ class ProviderProfile(models.Model):
         # Explicit type conversion to avoid IDE errors
         return "Provider: " + str(self.user.full_name)
 
-class OTPCode(models.Model):
+class PasswordResetCode(models.Model):
+    """One-time code proving phone-number ownership before a password reset.
+
+    Scoped specifically to password reset (not a generic reusable OTP model)
+    since that's the only place this is needed right now.
+    """
     objects = models.Manager()
-    
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otp_codes')
+
+    RESET_CODE_TTL_MINUTES = 10
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_codes')
     code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
 
     def is_expired(self):
-        now = timezone.now()
-        diff = now - self.created_at
-        return diff.total_seconds() > 600
+        return timezone.now() > self.expires_at
 
     @classmethod
     def generate_for_user(cls, user):
-        # Delete all previous OTPs for this user first
-        cls.objects.filter(user=user).delete()
-        otp_code = str(random.randint(100000, 999999))
-        return cls.objects.create(user=user, code=otp_code)
+        # A stale, still-pending code shouldn't remain valid once a new one
+        # is requested — but keep used codes around as an audit trail.
+        cls.objects.filter(user=user, is_used=False).delete()
+        code = str(random.randint(100000, 999999))
+        expires_at = timezone.now() + timezone.timedelta(minutes=cls.RESET_CODE_TTL_MINUTES)
+        return cls.objects.create(user=user, code=code, expires_at=expires_at)

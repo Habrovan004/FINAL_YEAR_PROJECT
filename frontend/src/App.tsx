@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { AuthProvider, useAuth, dashboardPathFor } from './context/AuthContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import { TextSizeProvider, useTextSize } from './context/TextSizeContext'
+import api from './api/client'
 
 // Global styles
 import 'leaflet/dist/leaflet.css'
@@ -14,6 +15,7 @@ import Login from './pages/Onboarding/Login'
 import OnboardingFlow from './pages/Onboarding/OnboardingFlow'
 import SelectHospital from './pages/Onboarding/SelectHospital'
 import PasswordResetRequest from './pages/Onboarding/PasswordResetRequest.tsx'
+import PasswordResetConfirm from './pages/Onboarding/PasswordResetConfirm.tsx'
 import HomePage from './pages/Home/HomePage'
 import BabyGrowthPage from './pages/Home/BabyGrowthPage'
 import TrackPage from './pages/Track/TrackPage'
@@ -29,6 +31,7 @@ import PreferencesPage from './pages/Profile/PreferencesPage'
 import ChatPage from './pages/Chat/ChatPage'
 import ProviderDashboard from './pages/Provider/ProviderDashboard'
 import ProviderChatQueue from './pages/Provider/ProviderChatQueue'
+import NotificationBell from './components/layout/NotificationBell'
 import './App.css'
 
 const queryClient = new QueryClient()
@@ -69,6 +72,7 @@ function GlobalControls() {
   const { dark, toggle } = useTheme()
   const { textSize, cycleTextSize } = useTextSize()
   const { i18n } = useTranslation()
+  const { user } = useAuth()
   const location = useLocation()
   const activeLanguage = i18n.language?.startsWith('sw') ? 'sw' : 'en'
   const sizeLabel = textSize === 'small' ? 'S' : textSize === 'large' ? 'L' : 'M'
@@ -84,6 +88,12 @@ function GlobalControls() {
   const toggleLanguage = () => {
     const nextLanguage = activeLanguage === 'sw' ? 'en' : 'sw'
     void i18n.changeLanguage(nextLanguage)
+    // Keep the backend preference (shown on the Profile/Settings pages) in
+    // sync with whatever's actually on screen — only patients have a
+    // PatientProfile, so scope this to avoid get_or_create-ing one for a provider.
+    if (user?.user_type === 'patient') {
+      api.patch('/patients/profile/', { language: nextLanguage }).catch(() => {})
+    }
   }
 
   return (
@@ -133,6 +143,7 @@ function App() {
                   <Route path="/" element={<Splash />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/password-reset/request" element={<PasswordResetRequest />} />
+                  <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />
                   <Route path="/onboarding" element={<OnboardingFlow />} />
 
                   {/* ── Mother onboarding (hospital pick) ── */}
@@ -168,6 +179,7 @@ function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
                 <GlobalControls />
+                <NotificationBell />
               </BrowserRouter>
             </AuthProvider>
           </TextSizeProvider>

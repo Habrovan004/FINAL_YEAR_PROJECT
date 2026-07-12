@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { useTextSize } from '../../context/TextSizeContext'
 import ANCVisitModal, { type PatientRow, type ANCSaveResponse } from './ANCVisitModal'
+import ScheduleAppointmentModal, { type AppointmentSaveResponse } from './ScheduleAppointmentModal'
 import './provider.css'
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -49,7 +50,7 @@ interface AppointmentRow {
   visit_type_display: string
   appointment_date: string
   appointment_time: string
-  status: 'upcoming' | 'attended' | 'missed' | 'cancelled'
+  status: 'requested' | 'upcoming' | 'attended' | 'missed' | 'cancelled'
   hospital_name: string | null
   notes: string
 }
@@ -128,8 +129,10 @@ function PatientPanel({
   patientId, patientName, onClose,
 }: { patientId: number; patientName: string; onClose: () => void }) {
   const { t } = useTranslation()
+  const nav = useNavigate()
   const [detail, setDetail] = useState<PatientDetailData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [messaging, setMessaging] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -140,6 +143,16 @@ function PatientPanel({
   }, [patientId])
 
   const recentVisits = (detail?.visits ?? []).slice(0, 3)
+
+  const startDirectChat = async () => {
+    setMessaging(true)
+    try {
+      const res = await api.post('/chat/rooms/', { patient_id: patientId })
+      nav(`/provider/chats?room=${res.data.id}`)
+    } finally {
+      setMessaging(false)
+    }
+  }
 
   return (
     <div
@@ -193,6 +206,22 @@ function PatientPanel({
                 </div>
               ))}
             </div>
+
+            <button
+              type="button"
+              disabled={messaging}
+              onClick={() => void startDirectChat()}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                width: '100%', background: '#D4537E', color: '#fff', border: 'none',
+                padding: '10px 14px', borderRadius: 10, fontWeight: 700, fontSize: '0.75rem',
+                cursor: messaging ? 'not-allowed' : 'pointer', opacity: messaging ? 0.7 : 1,
+                fontFamily: "'DM Sans', system-ui, sans-serif", marginBottom: 16,
+              }}
+            >
+              {messaging ? <Loader2 size={14} className="provider-spin" /> : <MessageCircle size={14} />}
+              {t('provider_message_mother')}
+            </button>
 
             <p style={{ fontSize: '0.625rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#D4537E', fontWeight: 700, marginBottom: 10 }}>
               {t('provider_recent_anc_visits')}
@@ -250,12 +279,17 @@ export default function ProviderDashboard() {
 
   const [ancOpen, setAncOpen] = useState(false)
   const [ancPatients, setAncPatients] = useState<PatientRow[]>([])
+  const [scheduleOpen, setScheduleOpen] = useState(false)
   const [todayCount, setTodayCount] = useState(0)
   const [toast, setToast] = useState<{ message: string } | null>(null)
 
   const [upcomingAppts, setUpcomingAppts] = useState<AppointmentRow[]>([])
   const [pastAppts, setPastAppts] = useState<AppointmentRow[]>([])
+  const [requestedAppts, setRequestedAppts] = useState<AppointmentRow[]>([])
   const [actioningApptId, setActioningApptId] = useState<number | null>(null)
+  const [proposingApptId, setProposingApptId] = useState<number | null>(null)
+  const [proposeDate, setProposeDate] = useState('')
+  const [proposeTime, setProposeTime] = useState('')
 
   const [acknowledgedAlerts, setAcknowledgedAlerts] = useState<Set<string>>(new Set())
   const [fadingAlerts, setFadingAlerts] = useState<Set<string>>(new Set())
@@ -288,12 +322,13 @@ export default function ProviderDashboard() {
     if (!silent) setLoading(true)
     setErr('')
     try {
-      const [dash, queue, pats, appts, history] = await Promise.all([
+      const [dash, queue, pats, appts, history, requested] = await Promise.all([
         api.get<DashboardPayload>('/auth/provider/dashboard/'),
         api.get<ChatQueueRow[]>('/chatbot/provider/queue/'),
         api.get<PatientRow[]>('/patients/'),
         api.get<AppointmentRow[]>('/appointments/?filter=upcoming'),
         api.get<AppointmentRow[]>('/appointments/?filter=history'),
+        api.get<AppointmentRow[]>('/appointments/?filter=requested'),
       ])
       setData(dash.data)
       setChatQueue(queue.data)
@@ -302,6 +337,7 @@ export default function ProviderDashboard() {
       setTodayCount(dash.data?.appointments?.today?.length ?? 0)
       setUpcomingAppts(appts.data)
       setPastAppts(history.data.slice().reverse())
+      setRequestedAppts(requested.data)
     } catch (e) {
       setErr(extractApiError(e, t('provider_failed_to_load')))
     } finally {
@@ -338,7 +374,18 @@ export default function ProviderDashboard() {
     setAncPatients(patients)
     void load(true)
     setToast({ message: t('provider_ai_recorded_success') })
-    if (res.risk_level === 'high') console.warn('HIGH RISK flagged:', res.risk_reasons)
+    // High-risk saves jump straight to the patient's detail panel so the
+    // provider sees the risk reasons/recommendations immediately, instead of
+    // having to notice and click into the alerts list themselves.
+    if (res.risk_level === 'high') {
+      setSelectedPatient({ id: res.patient, name: res.patient_name })
+    }
+  }
+
+  const handleApptScheduled = (res: AppointmentSaveResponse) => {
+    setScheduleOpen(false)
+    void load(true)
+    setToast({ message: `Appointment scheduled with ${res.patient_name} on ${res.appointment_date}` })
   }
 
   const handleAcknowledge = (key: string) => {
@@ -355,17 +402,37 @@ export default function ProviderDashboard() {
     setAncOpen(true)
   }
 
-  const statusLabel = (status: 'attended' | 'missed' | 'cancelled') =>
-    status === 'attended' ? t('provider_status_attended')
+  const statusLabel = (status: 'requested' | 'upcoming' | 'attended' | 'missed' | 'cancelled') =>
+    status === 'requested' ? t('provider_status_requested')
+      : status === 'upcoming' ? t('provider_status_confirmed')
+      : status === 'attended' ? t('provider_status_attended')
       : status === 'missed' ? t('provider_status_missed')
       : t('provider_status_cancelled')
 
-  const respondToAppointment = async (id: number, newStatus: 'attended' | 'missed' | 'cancelled') => {
+  const respondToAppointment = async (id: number, newStatus: 'upcoming' | 'attended' | 'missed' | 'cancelled') => {
     setActioningApptId(id)
     try {
       await api.patch(`/appointments/${id}/`, { status: newStatus })
       setUpcomingAppts(prev => prev.filter(a => a.id !== id))
+      setRequestedAppts(prev => prev.filter(a => a.id !== id))
       setToast({ message: t('provider_appt_marked', { status: statusLabel(newStatus) }) })
+      void load(true)
+    } catch (e) {
+      setToast({ message: extractApiError(e, t('provider_appt_update_failed')) })
+    } finally {
+      setActioningApptId(null)
+    }
+  }
+
+  const proposeNewTime = async (id: number) => {
+    if (!proposeDate || !proposeTime) return
+    setActioningApptId(id)
+    try {
+      await api.patch(`/appointments/${id}/`, { appointment_date: proposeDate, appointment_time: proposeTime })
+      setToast({ message: t('provider_time_proposed') })
+      setProposingApptId(null)
+      setProposeDate('')
+      setProposeTime('')
       void load(true)
     } catch (e) {
       setToast({ message: extractApiError(e, t('provider_appt_update_failed')) })
@@ -405,7 +472,7 @@ export default function ProviderDashboard() {
 
   const todaysAppts = data?.appointments.today ?? []
   const todayIso = new Date().toISOString().slice(0, 10)
-  const laterAppts = upcomingAppts.filter(a => a.appointment_date !== todayIso)
+  const laterAppts = upcomingAppts.filter(a => a.appointment_date !== todayIso && a.status === 'upcoming')
   const allAlerts = data?.critical_alerts ?? []
   const alerts = allAlerts.filter(a => !acknowledgedAlerts.has(`${a.type}-${a.id}`))
 
@@ -644,6 +711,86 @@ export default function ProviderDashboard() {
         })}
       </section>
 
+      {/* ── Pending appointment requests — mother-initiated, awaiting the provider's confirm/decline/propose-new-time ── */}
+      {requestedAppts.length > 0 && (
+        <section
+          className="provider-section pv-fade-up"
+          style={{ borderLeft: '3px solid #F59E0B', animationDelay: '130ms' }}
+        >
+          <div className="provider-section-header">
+            <h2>{t('provider_pending_requests')}</h2>
+            <span className="badge" aria-live="polite">{requestedAppts.length}</span>
+          </div>
+
+          {requestedAppts.map(a => {
+            const busy = actioningApptId === a.id
+            const proposing = proposingApptId === a.id
+            return (
+              <div
+                key={a.id}
+                style={{ padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p className="alert-patient">{a.patient_name}</p>
+                    <p className="alert-meta">
+                      {a.visit_type_display} · {a.appointment_date} at {a.appointment_time}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(29,158,117,0.12)', '#1D9E75'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(a.id, 'upcoming')}>
+                      {t('provider_confirm_request')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      style={{ ...apptActionBtn('rgba(0,0,0,0.06)', 'var(--pv-text)'), opacity: busy ? 0.5 : 1 }}
+                      onClick={() => {
+                        setProposingApptId(proposing ? null : a.id)
+                        setProposeDate(a.appointment_date)
+                        setProposeTime(a.appointment_time)
+                      }}
+                    >
+                      {t('provider_propose_new_time')}
+                    </button>
+                    <button type="button" disabled={busy} style={{ ...apptActionBtn('rgba(212,83,126,0.1)', '#D4537E'), opacity: busy ? 0.5 : 1 }} onClick={() => respondToAppointment(a.id, 'cancelled')}>
+                      {t('provider_decline_request')}
+                    </button>
+                  </div>
+                </div>
+
+                {proposing && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                    <input
+                      type="date"
+                      className="field-input"
+                      value={proposeDate}
+                      onChange={e => setProposeDate(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <input
+                      type="time"
+                      className="field-input"
+                      value={proposeTime}
+                      onChange={e => setProposeTime(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      disabled={busy || !proposeDate || !proposeTime}
+                      style={{ ...apptActionBtn('#D4537E', '#fff'), opacity: busy ? 0.5 : 1 }}
+                      onClick={() => void proposeNewTime(a.id)}
+                    >
+                      {t('provider_send_proposal')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </section>
+      )}
+
       {/* ── FIX 4 + FIX 7: Today's appointments ── */}
       <section
         className="provider-section pv-fade-up"
@@ -666,7 +813,7 @@ export default function ProviderDashboard() {
                 borderRadius: 10, fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
                 fontFamily: "'DM Sans', system-ui, sans-serif",
               }}
-              onClick={() => setAncOpen(true)}
+              onClick={() => setScheduleOpen(true)}
             >
               <CalendarPlus size={13} />
               {t('provider_schedule_appointment')}
@@ -713,7 +860,7 @@ export default function ProviderDashboard() {
                 fontFamily: "'DM Sans', system-ui, sans-serif",
                 marginTop: 10, marginBottom: 4,
               }}
-              onClick={() => setAncOpen(true)}
+              onClick={() => setScheduleOpen(true)}
             >
               <CalendarPlus size={13} />
               {t('provider_schedule_appointment')}
@@ -823,21 +970,21 @@ export default function ProviderDashboard() {
             </p>
           )}
         </div>
-        {chatQueue.length > 0 && (
-          <button
-            type="button"
-            style={{
-              background: '#D4537E', color: '#fff', border: 'none',
-              padding: '6px 12px', borderRadius: 8,
-              fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer',
-              fontFamily: "'DM Sans', system-ui, sans-serif",
-              flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4,
-            }}
-            onClick={() => nav('/provider/chats')}
-          >
-            {t('provider_view_queue')} <ChevronRight size={12} />
-          </button>
-        )}
+        <button
+          type="button"
+          style={{
+            background: chatQueue.length > 0 ? '#D4537E' : 'transparent',
+            color: chatQueue.length > 0 ? '#fff' : '#D4537E',
+            border: chatQueue.length > 0 ? 'none' : '1px solid #D4537E',
+            padding: '6px 12px', borderRadius: 8,
+            fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer',
+            fontFamily: "'DM Sans', system-ui, sans-serif",
+            flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4,
+          }}
+          onClick={() => nav('/provider/chats')}
+        >
+          {chatQueue.length > 0 ? t('provider_view_queue') : t('provider_open_chats')} <ChevronRight size={12} />
+        </button>
       </div>
 
       {/* ── FIX 5: Record ANC visit FAB ── */}
@@ -880,6 +1027,13 @@ export default function ProviderDashboard() {
         patients={ancPatients}
         onClose={() => { setAncOpen(false); setAncPatients(patients) }}
         onSaved={handleSaved}
+      />
+
+      <ScheduleAppointmentModal
+        open={scheduleOpen}
+        patients={patients}
+        onClose={() => setScheduleOpen(false)}
+        onSaved={handleApptScheduled}
       />
 
       {selectedPatient && (

@@ -40,9 +40,12 @@ def profile(request):
             profile.onboarding_completed = True
             profile.save()
 
-        if profile.pregnancy_status == 'pregnant' and profile.onboarding_completed:
-            assign_provider_to_mother(profile)
-                
+        if profile.pregnancy_status == 'pregnant' and profile.onboarding_completed and not profile.assigned_provider:
+            provider = assign_provider_to_mother(profile)
+            if provider:
+                profile.assigned_provider = provider
+                profile.save()
+
         return Response(PatientProfileSerializer(profile).data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -94,8 +97,11 @@ def complete_onboarding(request):
         report.save()
 
     # Assign provider if pregnant
-    if profile.pregnancy_status == 'pregnant':
-        assign_provider_to_mother(profile)
+    if profile.pregnancy_status == 'pregnant' and not profile.assigned_provider:
+        provider = assign_provider_to_mother(profile)
+        if provider:
+            profile.assigned_provider = provider
+            profile.save()
 
     return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
 
@@ -132,6 +138,14 @@ def dashboard(request):
         is_read=False,
     ).exclude(sender=request.user).count()
 
+    last_mood = MoodLog.objects.filter(user=request.user).order_by('-logged_at').first()
+
+    # Only a confirmed appointment is shown here — a still-pending request
+    # isn't a commitment yet, so it'd be misleading in a "next appointment" banner.
+    next_appt = Appointment.objects.filter(
+        user=request.user, status='upcoming', appointment_date__gte=date.today(),
+    ).order_by('appointment_date', 'appointment_time').first()
+
     return Response({
         'user_name': request.user.full_name,
         'pregnancy_info': {
@@ -141,6 +155,14 @@ def dashboard(request):
         },
         'baby_growth': BabyGrowthSerializer(growth).data if growth else None,
         'daily_tip': TipSerializer(daily_tip).data if daily_tip else None,
+        'health_status': {
+            'mood_label': last_mood.get_mood_display() if last_mood else None,
+            'logged_at': last_mood.logged_at.isoformat() if last_mood else None,
+        },
+        'next_appointment': {
+            'date': next_appt.appointment_date.isoformat(),
+            'visit_type': next_appt.get_visit_type_display(),
+        } if next_appt else None,
         'notifications_count': unread_count,
     })
 

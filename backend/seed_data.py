@@ -330,40 +330,270 @@ def seed():
     print("✅ Baby growth data seeded.")
 
     # 4. Seed Tip Categories and Tips
+    #
+    # The Learn page's category tabs (frontend/src/pages/Learn/LearnPage.tsx)
+    # filter client-side by checking whether the tip's title/tip_type contains
+    # the category's English phrase (e.g. "what to do", "hormonal changes") —
+    # so every tip below deliberately includes that phrase in its title.
     cat_nutrition, _ = TipCategory.objects.get_or_create(name="Nutrition", defaults={"name_sw": "Lishe", "icon": "🥗", "color": "#dcfce7"})
     cat_warning, _ = TipCategory.objects.get_or_create(name="Warning Signs", defaults={"name_sw": "Dalili za Hatari", "icon": "⚠️", "color": "#fee2e2"})
+    cat_what_to_do, _ = TipCategory.objects.get_or_create(name="What to Do", defaults={"name_sw": "Nini cha Kufanya", "icon": "🍎", "color": "#ffe4e6"})
+    cat_what_to_avoid, _ = TipCategory.objects.get_or_create(name="What to Avoid", defaults={"name_sw": "Nini cha Kuepuka", "icon": "⚠️", "color": "#ffe4e6"})
+    cat_body_changes, _ = TipCategory.objects.get_or_create(name="Body Changes", defaults={"name_sw": "Mabadiliko ya Mwili", "icon": "✨", "color": "#ede9fe"})
+    cat_birth_prep, _ = TipCategory.objects.get_or_create(name="Birth Prep", defaults={"name_sw": "Maandalizi ya Kujifungua", "icon": "🐣", "color": "#fce7f3"})
 
     tips = [
+        # ── Nutrition & Food ────────────────────────────────────────────
         {
             "category": cat_nutrition,
             "title": "Stay Hydrated",
             "title_sw": "Kunywa Maji ya Kutosha",
             "description": "Drink at least 8-10 glasses of water daily to maintain amniotic fluid levels.",
+            "description_sw": "Kunywa angalau glasi 8-10 za maji kila siku ili kudumisha kiwango cha maji ya uchungu.",
             "tip_type": "nutrition",
             "trimester": "all",
-            "is_daily": True
-        },
-        {
-            "category": cat_warning,
-            "title": "Severe Headache",
-            "title_sw": "Maumivu Makali ya Kichwa",
-            "description": "If you have a headache that won't go away, contact your doctor as it could be a sign of high blood pressure.",
-            "tip_type": "warning",
-            "trimester": "2",
-            "is_daily": False
+            "is_daily": True,
         },
         {
             "category": cat_nutrition,
             "title": "Eat Iron-Rich Foods",
             "title_sw": "Kula Vyakula vyenye Chuma",
             "description": "Focus on spinach, liver, and beans to prevent anemia during your second trimester.",
+            "description_sw": "Zingatia mchicha, maini, na maharage ili kuzuia upungufu wa damu wakati wa trimester ya pili.",
             "tip_type": "nutrition",
             "trimester": "2",
-            "is_daily": True
-        }
+            "is_daily": True,
+        },
+        {
+            "category": cat_nutrition,
+            "title": "Nutrition & Food Tips for the First Trimester",
+            "title_sw": "Ushauri wa Lishe kwa Trimester ya Kwanza",
+            "description": "Eat small, frequent meals with folate-rich foods like beans and leafy greens to ease nausea and support early development.",
+            "description_sw": "Kula milo midogo mara kwa mara yenye vyakula vyenye folate kama maharage na mboga za majani ili kupunguza kichefuchefu na kusaidia ukuaji wa awali.",
+            "tip_type": "nutrition",
+            "trimester": "1",
+            "is_daily": True,
+        },
+        {
+            "category": cat_nutrition,
+            "title": "Nutrition & Food for the Third Trimester",
+            "title_sw": "Lishe na Chakula kwa Trimester ya Tatu",
+            "description": "Add more calcium and fiber-rich foods to support the baby's bones and ease constipation as your due date nears.",
+            "description_sw": "Ongeza vyakula vyenye kalsiamu na nyuzinyuzi ili kusaidia mifupa ya mtoto na kupunguza kuvimbiwa unapokaribia tarehe ya kujifungua.",
+            "tip_type": "nutrition",
+            "trimester": "3",
+            "is_daily": True,
+        },
+        # ── Warning Signs ───────────────────────────────────────────────
+        {
+            "category": cat_warning,
+            "title": "Severe Headache",
+            "title_sw": "Maumivu Makali ya Kichwa",
+            "description": "If you have a headache that won't go away, contact your doctor as it could be a sign of high blood pressure.",
+            "description_sw": "Ukiwa na maumivu ya kichwa yasiyoisha, wasiliana na daktari wako kwani yanaweza kuwa dalili ya shinikizo la juu la damu.",
+            "tip_type": "warning",
+            "trimester": "2",
+            "is_daily": False,
+        },
+        {
+            "category": cat_warning,
+            "title": "Warning Signs You Should Never Ignore",
+            "title_sw": "Dalili za Hatari Usizopaswa Kuzipuuza",
+            "description": "Vaginal bleeding, severe abdominal pain, blurred vision, or reduced baby movement need immediate medical attention — don't wait it out.",
+            "description_sw": "Kutokwa na damu ukeni, maumivu makali ya tumbo, kutoona vizuri, au kupungua kwa mwendo wa mtoto vinahitaji huduma ya haraka — usisubiri.",
+            "tip_type": "warning",
+            "trimester": "all",
+            "is_daily": False,
+        },
+        {
+            "category": cat_warning,
+            "title": "Warning Signs in Early Pregnancy",
+            "title_sw": "Dalili za Hatari Katika Ujauzito wa Mwanzo",
+            "description": "Heavy bleeding or severe cramping in the first trimester can signal a miscarriage or ectopic pregnancy — see a provider right away.",
+            "description_sw": "Kutokwa na damu nyingi au maumivu makali ya tumbo katika trimester ya kwanza yanaweza kuashiria mimba kuharibika au mimba nje ya mfuko wa uzazi — muone mtoa huduma mara moja.",
+            "tip_type": "warning",
+            "trimester": "1",
+            "is_daily": False,
+        },
+        {
+            "category": cat_warning,
+            "title": "Warning Signs of Labour Complications",
+            "title_sw": "Dalili za Hatari za Matatizo ya Uchungu",
+            "description": "Fluid leaking before term, no fetal movement, or sudden swelling of the hands and face can signal a complication — contact your provider immediately.",
+            "description_sw": "Kutoka kwa maji kabla ya muda, kukosekana kwa mwendo wa mtoto, au uvimbe wa ghafla wa mikono na uso vinaweza kuashiria tatizo — wasiliana na mtoa huduma mara moja.",
+            "tip_type": "warning",
+            "trimester": "3",
+            "is_daily": False,
+        },
+        # ── What to Do ──────────────────────────────────────────────────
+        {
+            "category": cat_what_to_do,
+            "title": "What to Do in Every Trimester: Take Your Prenatal Vitamins",
+            "title_sw": "Nini cha Kufanya Kila Trimester: Tumia Vidonge vya Ujauzito",
+            "description": "Take your folic acid and iron supplements daily as prescribed to support your baby's growth and your own health.",
+            "description_sw": "Tumia vidonge vya folic acid na chuma kila siku kama ulivyoelekezwa ili kusaidia ukuaji wa mtoto na afya yako.",
+            "tip_type": "tip",
+            "trimester": "all",
+            "is_daily": True,
+        },
+        {
+            "category": cat_what_to_do,
+            "title": "What to Do in Your First Trimester",
+            "title_sw": "Nini cha Kufanya Katika Trimester ya Kwanza",
+            "description": "Book your first antenatal visit as soon as you confirm your pregnancy, and get plenty of rest while your body adjusts.",
+            "description_sw": "Panga kliniki yako ya kwanza ya ujauzito mara tu unapothibitisha ujauzito, na pumzika vya kutosha wakati mwili wako unazoea.",
+            "tip_type": "tip",
+            "trimester": "1",
+            "is_daily": False,
+        },
+        {
+            "category": cat_what_to_do,
+            "title": "What to Do in Your Second Trimester",
+            "title_sw": "Nini cha Kufanya Katika Trimester ya Pili",
+            "description": "Start gentle exercise like walking, sleep on your side, and begin tracking your baby's daily movements.",
+            "description_sw": "Anza mazoezi mepesi kama kutembea, lala ubavuni, na anza kufuatilia mwendo wa mtoto kila siku.",
+            "tip_type": "tip",
+            "trimester": "2",
+            "is_daily": False,
+        },
+        {
+            "category": cat_what_to_do,
+            "title": "What to Do in Your Third Trimester",
+            "title_sw": "Nini cha Kufanya Katika Trimester ya Tatu",
+            "description": "Pack your hospital bag, count your baby's kicks daily, and make sure you know the signs of labour.",
+            "description_sw": "Andaa mkoba wako wa hospitalini, hesabu mateke ya mtoto kila siku, na hakikisha unajua dalili za uchungu.",
+            "tip_type": "tip",
+            "trimester": "3",
+            "is_daily": False,
+        },
+        # ── What to Avoid ───────────────────────────────────────────────
+        {
+            "category": cat_what_to_avoid,
+            "title": "What to Avoid During Pregnancy: Alcohol and Smoking",
+            "title_sw": "Nini cha Kuepuka Wakati wa Ujauzito: Pombe na Sigara",
+            "description": "Avoid alcohol, smoking, and secondhand smoke throughout pregnancy — they raise the risk of birth defects and low birth weight.",
+            "description_sw": "Epuka pombe, sigara, na moshi wa sigara wakati wote wa ujauzito — vinaongeza hatari ya kasoro za kuzaliwa na uzito mdogo wa mtoto.",
+            "tip_type": "tip",
+            "trimester": "all",
+            "is_daily": False,
+        },
+        {
+            "category": cat_what_to_avoid,
+            "title": "What to Avoid in Your First Trimester",
+            "title_sw": "Nini cha Kuepuka Katika Trimester ya Kwanza",
+            "description": "Avoid raw or undercooked meat, unpasteurized dairy, and any medication your doctor hasn't approved.",
+            "description_sw": "Epuka nyama mbichi au isiyoiva vizuri, maziwa yasiyochemshwa, na dawa yoyote ambayo daktari hajaidhinisha.",
+            "tip_type": "tip",
+            "trimester": "1",
+            "is_daily": False,
+        },
+        {
+            "category": cat_what_to_avoid,
+            "title": "What to Avoid in Your Second Trimester",
+            "title_sw": "Nini cha Kuepuka Katika Trimester ya Pili",
+            "description": "Avoid lying flat on your back for long periods and cut back on caffeine to one cup a day or less.",
+            "description_sw": "Epuka kulala chali kwa muda mrefu na punguza kafeini hadi kikombe kimoja au chini kwa siku.",
+            "tip_type": "tip",
+            "trimester": "2",
+            "is_daily": False,
+        },
+        {
+            "category": cat_what_to_avoid,
+            "title": "What to Avoid in Your Third Trimester",
+            "title_sw": "Nini cha Kuepuka Katika Trimester ya Tatu",
+            "description": "Avoid long-distance travel without breaks and standing for long stretches, since both can strain your body as your due date nears.",
+            "description_sw": "Epuka safari ndefu bila mapumziko na kusimama kwa muda mrefu, kwani vyote vinaweza kulemea mwili wako unapokaribia kujifungua.",
+            "tip_type": "tip",
+            "trimester": "3",
+            "is_daily": False,
+        },
+        # ── Body Changes (hormonal) ─────────────────────────────────────
+        {
+            "category": cat_body_changes,
+            "title": "Hormonal Changes in Pregnancy Explained",
+            "title_sw": "Mabadiliko ya Homoni Wakati wa Ujauzito Yamefafanuliwa",
+            "description": "Rising hCG, progesterone, and estrogen drive most pregnancy symptoms — knowing why can make them easier to manage.",
+            "description_sw": "Kuongezeka kwa hCG, progesterone, na estrogen ndiko kunakosababisha dalili nyingi za ujauzito — kujua sababu kunaweza kurahisisha kuzimudu.",
+            "tip_type": "info",
+            "trimester": "all",
+            "is_daily": False,
+        },
+        {
+            "category": cat_body_changes,
+            "title": "Hormonal Changes in Your First Trimester",
+            "title_sw": "Mabadiliko ya Homoni Katika Trimester ya Kwanza",
+            "description": "Nausea, breast tenderness, and fatigue in early pregnancy are driven by the sudden rise in pregnancy hormones — they usually ease by the second trimester.",
+            "description_sw": "Kichefuchefu, maumivu ya matiti, na uchovu mwanzoni mwa ujauzito husababishwa na kuongezeka kwa homoni kwa ghafla — kwa kawaida hupungua kufikia trimester ya pili.",
+            "tip_type": "info",
+            "trimester": "1",
+            "is_daily": False,
+        },
+        {
+            "category": cat_body_changes,
+            "title": "Hormonal Changes in Your Second Trimester",
+            "title_sw": "Mabadiliko ya Homoni Katika Trimester ya Pili",
+            "description": "You may notice skin darkening, a dark line down your belly, and more energy — all normal effects of pregnancy hormones.",
+            "description_sw": "Unaweza kugundua weusi wa ngozi, mstari mweusi tumboni, na nguvu zaidi — yote ni madhara ya kawaida ya homoni za ujauzito.",
+            "tip_type": "info",
+            "trimester": "2",
+            "is_daily": False,
+        },
+        {
+            "category": cat_body_changes,
+            "title": "Hormonal Changes in Your Third Trimester",
+            "title_sw": "Mabadiliko ya Homoni Katika Trimester ya Tatu",
+            "description": "The hormone relaxin loosens your joints and ligaments to prepare your body for birth, which is why you may feel less steady on your feet.",
+            "description_sw": "Homoni ya relaxin hulegeza viungo na mishipa ili kuandaa mwili wako kwa kujifungua, ndiyo maana unaweza kujisikia huna usawa mzuri unapotembea.",
+            "tip_type": "info",
+            "trimester": "3",
+            "is_daily": False,
+        },
+        # ── Birth Prep ──────────────────────────────────────────────────
+        {
+            "category": cat_birth_prep,
+            "title": "Birth Prep Checklist for Every Mother",
+            "title_sw": "Orodha ya Maandalizi ya Kujifungua kwa Kila Mama",
+            "description": "Know your facility, your emergency contacts, and your transport plan well before your due date — good birth prep starts early.",
+            "description_sw": "Jua kituo chako cha afya, mawasiliano ya dharura, na mpango wa usafiri mapema kabla ya tarehe yako ya kujifungua — maandalizi mazuri huanza mapema.",
+            "tip_type": "tip",
+            "trimester": "all",
+            "is_daily": False,
+        },
+        {
+            "category": cat_birth_prep,
+            "title": "Birth Prep: Choosing Your Delivery Facility Early",
+            "title_sw": "Maandalizi ya Kujifungua: Kuchagua Kituo Mapema",
+            "description": "Pick and register at your preferred delivery facility early in pregnancy so there are no surprises when labour starts.",
+            "description_sw": "Chagua na jiandikishe katika kituo unachopendelea cha kujifungulia mapema katika ujauzito ili kuepuka mshangao uchungu unapoanza.",
+            "tip_type": "tip",
+            "trimester": "1",
+            "is_daily": False,
+        },
+        {
+            "category": cat_birth_prep,
+            "title": "Birth Prep: Antenatal Classes and Breathing Techniques",
+            "title_sw": "Maandalizi ya Kujifungua: Madarasa na Mbinu za Kupumua",
+            "description": "Join antenatal classes to learn breathing and relaxation techniques that make labour easier to cope with.",
+            "description_sw": "Jiunge na madarasa ya ujauzito kujifunza mbinu za kupumua na kutuliza ambazo hurahisisha kukabiliana na uchungu wa kujifungua.",
+            "tip_type": "tip",
+            "trimester": "2",
+            "is_daily": False,
+        },
+        {
+            "category": cat_birth_prep,
+            "title": "Birth Prep: Packing Your Hospital Bag and Birth Plan",
+            "title_sw": "Maandalizi ya Kujifungua: Mkoba wa Hospitalini na Mpango wa Kujifungua",
+            "description": "Pack your hospital bag and write down your birth plan by 36 weeks so you're ready whenever labour begins.",
+            "description_sw": "Andaa mkoba wako wa hospitalini na andika mpango wako wa kujifungua kufikia wiki 36 ili uwe tayari wakati wowote uchungu utakapoanza.",
+            "tip_type": "tip",
+            "trimester": "3",
+            "is_daily": False,
+        },
     ]
     for t in tips:
-        Tip.objects.get_or_create(title=t['title'], defaults=t)
+        t.setdefault("is_approved", True)
+        t.setdefault("is_reviewed", True)
+        Tip.objects.update_or_create(title=t['title'], defaults=t)
     print("✅ Tip categories and tips seeded.")
 
     print("\n🚀 All done! Your Mimba Yangu app is now full of content.")

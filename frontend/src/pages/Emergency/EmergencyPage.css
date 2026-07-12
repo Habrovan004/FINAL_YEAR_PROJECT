@@ -508,6 +508,20 @@
   animation: emg-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+/* Distinct-but-still-calm states for unconfirmed / failed delivery */
+.emg-ack-card.tone-amber {
+  background: color-mix(in srgb, #f59e0b 16%, var(--bg-card));
+  border-color: color-mix(in srgb, #f59e0b 32%, var(--border));
+}
+
+.emg-ack-card.tone-error {
+  background: color-mix(in srgb, var(--error) 14%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--error) 30%, var(--border));
+}
+
+.emg-ack-icon.tone-amber { background: #f59e0b; }
+.emg-ack-icon.tone-error { background: var(--error); }
+
 @keyframes emg-pop {
   from { opacity: 0; transform: scale(0.3); }
   to { opacity: 1; transform: scale(1); }
@@ -590,6 +604,22 @@
 .emg-quick-cta.ghost:hover { background: var(--bg-pink); }
 .emg-quick-cta.ghost:active { transform: scale(0.97); }
 
+.emg-quick-cta.full-width { width: 100%; }
+
+/* Visually more prominent call CTA when the SMS isn't confirmed sent */
+.emg-quick-cta.urgent { animation: emg-cta-pulse 1.7s ease-in-out infinite; }
+
+.emg-quick-cta.tone-amber-cta { background: #f59e0b; color: #fff; }
+.emg-quick-cta.tone-amber-cta:hover { background: #d97706; }
+
+.emg-quick-cta.tone-error-cta { background: var(--error); color: #fff; }
+.emg-quick-cta.tone-error-cta:hover { filter: brightness(0.92); }
+
+@keyframes emg-cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.16); }
+  50% { box-shadow: 0 0 0 8px rgba(0, 0, 0, 0); }
+}
+
 .emg-instr-list {
   display: flex;
   flex-direction: column;
@@ -640,6 +670,14 @@
 
 .emg-cancel-btn:hover { background: var(--bg-pink); color: var(--accent); }
 
+.emg-close-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+  line-height: 1.4;
+}
+
 /* ── Accessibility helper ───────────────────── */
 .sr-only {
   position: absolute;
@@ -667,4 +705,5 @@
   .emg-sos-core,
   .emg-ack-icon { animation: none; }
   .emg-sos-ring-fill { transition: none; }
+  .emg-quick-cta.urgent { animation: none; }
 }

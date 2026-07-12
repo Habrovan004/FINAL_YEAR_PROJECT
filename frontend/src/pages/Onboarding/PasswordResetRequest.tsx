@@ -9,28 +9,21 @@ export default function PasswordResetRequest() {
   const nav = useNavigate()
   const { t } = useTranslation()
   const [phone, setPhone] = useState('')
-  const [newPass, setNewPass] = useState('')
-  const [confirmPass, setConfirmPass] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
 
   const phoneIsValid = /^0?7\d{8}$/.test(phone.replace(/\s+/g, '')) || /^\+?2557\d{8}$/.test(phone.replace(/\s+/g, ''))
-  const passwordIsValid = newPass.length >= 6
-  const passwordsMatch = newPass === confirmPass
-  const canSubmit = phoneIsValid && passwordIsValid && passwordsMatch
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!phoneIsValid) { setError(t('invalid_tz_phone')); return }
-    if (!passwordIsValid) { setError(t('password_min_8')); return }
-    if (!passwordsMatch) { setError(t('passwords_no_match')); return }
 
-    setLoading(true); setError(''); setSuccess('')
+    setLoading(true); setError('')
     try {
-      await api.post('/auth/password-reset/', { phone_number: phone, new_password: newPass })
-      setSuccess(t('reset_success'))
-      setTimeout(() => nav('/login'), 1500)
+      // Always succeeds regardless of whether the number is registered — the
+      // backend never reveals that, so just move on to the code-entry step.
+      await api.post('/auth/password-reset/request/', { phone_number: phone })
+      nav('/password-reset/confirm', { state: { phoneNumber: phone } })
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } }
       setError(axiosErr?.response?.data?.error || t('reset_failed'))
@@ -62,36 +55,13 @@ export default function PasswordResetRequest() {
               required
             />
           </div>
-          <div>
-            <label className="field-label">{t('new_password')}</label>
-            <input
-              className="field-input"
-              type="password"
-              value={newPass}
-              onChange={e => setNewPass(e.target.value)}
-              placeholder={t('new_password')}
-              required
-            />
-          </div>
-          <div>
-            <label className="field-label">{t('confirm_password')}</label>
-            <input
-              className="field-input"
-              type="password"
-              value={confirmPass}
-              onChange={e => setConfirmPass(e.target.value)}
-              placeholder={t('confirm_password')}
-              required
-            />
-          </div>
         </div>
 
         {error && <p className="auth-error">{error}</p>}
-        {success && <p className="auth-success">{success}</p>}
 
         <div className="login-ctas">
-          <button className="btn-primary" type="submit" disabled={loading || !canSubmit}>
-            {loading ? t('saving_ellipsis') : t('set_password')}
+          <button className="btn-primary" type="submit" disabled={loading || !phoneIsValid}>
+            {loading ? t('saving_ellipsis') : t('send_reset_code')}
           </button>
           <button className="btn-ghost" type="button" onClick={() => nav('/login')}>
             {t('back_to_login')}

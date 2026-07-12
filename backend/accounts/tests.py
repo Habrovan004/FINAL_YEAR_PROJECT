@@ -1,5 +1,5 @@
 from rest_framework.test import APITestCase
-from .models import User, OTPCode
+from .models import User, PasswordResetCode
 
 
 class PasswordResetTests(APITestCase):
@@ -7,36 +7,73 @@ class PasswordResetTests(APITestCase):
 		self.phone = '0712345678'
 		self.user = User.objects.create_user(phone_number=self.phone, full_name='Test User', password='oldpass')
 
-	def test_password_reset_flow(self):
-		# Request password reset
+	def test_request_then_confirm_resets_password(self):
 		resp = self.client.post('/api/auth/password-reset/request/', {'phone_number': self.phone}, format='json')
 		self.assertEqual(resp.status_code, 200)
-		otp = OTPCode.objects.filter(user=self.user).last()
-		self.assertIsNotNone(otp)
+		reset_code = PasswordResetCode.objects.filter(user=self.user).last()
+		self.assertIsNotNone(reset_code)
 
-		# Confirm password reset
 		resp2 = self.client.post('/api/auth/password-reset/confirm/', {
 			'phone_number': self.phone,
-			'code': otp.code,
-			'new_password': 'newpass123'
+			'code': reset_code.code,
+			'new_password': 'newpass123',
 		}, format='json')
 		self.assertEqual(resp2.status_code, 200)
 
-		# Verify password changed
 		self.user.refresh_from_db()
 		self.assertTrue(self.user.check_password('newpass123'))
 
-	def test_password_reset_request_rejects_unknown_phone(self):
-		resp = self.client.post('/api/auth/password-reset/request/', {'phone_number': '0700000000'}, format='json')
-		self.assertEqual(resp.status_code, 404)
-		self.assertEqual(resp.data['error'], 'User not found.')
+		reset_code.refresh_from_db()
+		self.assertTrue(reset_code.is_used)
 
-	def test_password_reset_confirm_rejects_invalid_code(self):
+	def test_request_does_not_leak_whether_phone_is_registered(self):
+		resp_known = self.client.post('/api/auth/password-reset/request/', {'phone_number': self.phone}, format='json')
+		resp_unknown = self.client.post('/api/auth/password-reset/request/', {'phone_number': '0700000000'}, format='json')
+		self.assertEqual(resp_known.status_code, 200)
+		self.assertEqual(resp_unknown.status_code, 200)
+		self.assertEqual(resp_known.data, resp_unknown.data)
+		self.assertEqual(PasswordResetCode.objects.filter(user__phone_number='0700000000').count(), 0)
+
+	def test_confirm_rejects_wrong_code(self):
+		self.client.post('/api/auth/password-reset/request/', {'phone_number': self.phone}, format='json')
 		resp = self.client.post('/api/auth/password-reset/confirm/', {
 			'phone_number': self.phone,
 			'code': '000000',
-			'new_password': 'newpass123'
+			'new_password': 'newpass123',
 		}, format='json')
 		self.assertEqual(resp.status_code, 400)
 		self.assertEqual(resp.data['error'], 'Invalid or expired code.')
 
+	def test_confirm_rejects_reused_code(self):
+		self.client.post('/api/auth/password-reset/request/', {'phone_number': self.phone}, format='json')
+		reset_code = PasswordResetCode.objects.filter(user=self.user).last()
+
+		first = self.client.post('/api/auth/password-reset/confirm/', {
+			'phone_number': self.phone,
+			'code': reset_code.code,
+			'new_password': 'newpass123',
+		}, format='json')
+		self.assertEqual(first.status_code, 200)
+
+		second = self.client.post('/api/auth/password-reset/confirm/', {
+			'phone_number': self.phone,
+			'code': reset_code.code,
+			'new_password': 'anotherpass456',
+		}, format='json')
+		self.assertEqual(second.status_code, 400)
+		self.assertEqual(second.data['error'], 'Invalid or expired code.')
+
+	def test_confirm_rejects_expired_code(self):
+		from django.utils import timezone
+		self.client.post('/api/auth/password-reset/request/', {'phone_number': self.phone}, format='json')
+		reset_code = PasswordResetCode.objects.filter(user=self.user).last()
+		reset_code.expires_at = timezone.now() - timezone.timedelta(seconds=1)
+		reset_code.save(update_fields=['expires_at'])
+
+		resp = self.client.post('/api/auth/password-reset/confirm/', {
+			'phone_number': self.phone,
+			'code': reset_code.code,
+			'new_password': 'newpass123',
+		}, format='json')
+		self.assertEqual(resp.status_code, 400)
+		self.assertEqual(resp.data['error'], 'Invalid or expired code.')

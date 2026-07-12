@@ -65,7 +65,7 @@ const PREFERENCE_CONFIG = [
 
 
 interface AxiosError {
-  response?: { data?: any }
+  response?: { data?: any; status?: number }
 }
 
 export default function OnboardingFlow() {
@@ -224,9 +224,12 @@ export default function OnboardingFlow() {
       const axiosErr = err as AxiosError
       const data = axiosErr.response?.data
       let msg = 'Error completing setup'
-      if (data) {
+      if (axiosErr.response?.status === 429) {
+        msg = 'Too many attempts from this device. Please wait a few minutes and try again.'
+      } else if (data) {
         if (data.phone_number) msg = `Phone number: ${data.phone_number[0]}`
         else if (data.error) msg = data.error
+        else if (typeof data.detail === 'string') msg = data.detail
         else if (typeof data === 'string') msg = data.slice(0, 100)
         else {
           const firstKey = Object.keys(data)[0]

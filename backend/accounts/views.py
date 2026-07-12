@@ -14,8 +14,9 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers import (
     RegisterSerializer, LoginSerializer, UserSerializer
 )
-from .models import User
-from .throttles import LoginThrottle, PasswordResetThrottle, RegisterThrottle
+from .models import User, PasswordResetCode
+from .sms import sms
+from .throttles import LoginThrottle, PasswordResetThrottle, OTPVerifyThrottle, RegisterThrottle
 from appointments.models import Appointment
 from tracking.models import SymptomReport
 from emergency.models import EmergencyLog
@@ -68,17 +69,63 @@ class CookieTokenRefreshView(TokenRefreshView):
         return response
 
 
+def _send_password_reset_sms(phone_number, code):
+    formatted_phone = f"+255{phone_number.lstrip('0')}"
+    message = f"Your Mimba Yangu password reset code is: {code}"
+    try:
+        response = sms.send(message, [formatted_phone])
+        print(f"Password reset SMS sent successfully to {formatted_phone}: {response}")
+    except Exception as e:
+        print(f"Password reset SMS failed to {formatted_phone}: {e}")
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 @throttle_classes([PasswordResetThrottle])
-def reset_password(request):
-    """Reset password by phone number — no OTP required."""
-    phone_number = request.data.get('phone_number')
-    new_password = request.data.get('new_password')
+def request_password_reset(request):
+    """Step 1 — send a reset code by SMS if the phone number is registered.
 
-    if not phone_number or not new_password:
+    Always returns the same generic response regardless of whether the
+    phone number matches an account, so this endpoint can't be used to
+    enumerate registered phone numbers.
+    """
+    phone_number = request.data.get('phone_number')
+    generic_response = Response(
+        {'message': 'If this number is registered, a code has been sent.'},
+        status=status.HTTP_200_OK,
+    )
+    if not phone_number:
+        return generic_response
+
+    try:
+        user = User.objects.get(phone_number=phone_number)
+    except User.DoesNotExist:
+        return generic_response
+
+    reset_code = PasswordResetCode.generate_for_user(user)
+    _send_password_reset_sms(phone_number, reset_code.code)
+    return generic_response
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([OTPVerifyThrottle])
+def confirm_password_reset(request):
+    """Step 2 — verify the code and set the new password.
+
+    Wrong code, expired code, and already-used code all return the same
+    generic error so a caller can't tell which one it was.
+    """
+    phone_number = request.data.get('phone_number')
+    code = request.data.get('code')
+    new_password = request.data.get('new_password')
+    invalid_code_response = Response(
+        {'error': 'Invalid or expired code.'}, status=status.HTTP_400_BAD_REQUEST,
+    )
+
+    if not phone_number or not code or not new_password:
         return Response(
-            {'error': 'phone_number and new_password are required.'},
+            {'error': 'phone_number, code, and new_password are required.'},
             status=status.HTTP_400_BAD_REQUEST,
         )
     if len(new_password) < 6:
@@ -89,11 +136,23 @@ def reset_password(request):
 
     try:
         user = User.objects.get(phone_number=phone_number)
-        user.set_password(new_password)
-        user.save()
-        return Response({'message': 'Password reset successful.'}, status=status.HTTP_200_OK)
     except User.DoesNotExist:
-        return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return invalid_code_response
+
+    reset_code = (
+        PasswordResetCode.objects
+        .filter(user=user, code=code, is_used=False)
+        .order_by('-created_at')
+        .first()
+    )
+    if not reset_code or reset_code.is_expired():
+        return invalid_code_response
+
+    user.set_password(new_password)
+    user.save()
+    reset_code.is_used = True
+    reset_code.save(update_fields=['is_used'])
+    return Response({'message': 'Password reset successful.'}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])

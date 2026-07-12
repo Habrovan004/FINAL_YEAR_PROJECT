@@ -15,6 +15,7 @@ import Login from './pages/Onboarding/Login'
 import OnboardingFlow from './pages/Onboarding/OnboardingFlow'
 import SelectHospital from './pages/Onboarding/SelectHospital'
 import PasswordResetRequest from './pages/Onboarding/PasswordResetRequest.tsx'
+import PasswordResetConfirm from './pages/Onboarding/PasswordResetConfirm.tsx'
 import HomePage from './pages/Home/HomePage'
 import BabyGrowthPage from './pages/Home/BabyGrowthPage'
 import TrackPage from './pages/Track/TrackPage'
@@ -142,6 +143,7 @@ function App() {
                   <Route path="/" element={<Splash />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/password-reset/request" element={<PasswordResetRequest />} />
+                  <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />
                   <Route path="/onboarding" element={<OnboardingFlow />} />
 
                   {/* ── Mother onboarding (hospital pick) ── */}

@@ -16,7 +16,11 @@
       "Bash(curl -s -X POST http://127.0.0.1:8000/api/auth/login/ -H 'Content-Type: application/json' -d '{\"phone_number\": \"+255700000001\", \"password\": \"Demo1234\"}')",
       "Bash(python -m json.tool)",
       "Bash(curl -s -X POST http://127.0.0.1:8000/api/auth/login/ -H 'Content-Type: application/json' -d '{\"phone_number\": \"+255700000002\", \"password\": \"Demo1234\"}')",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(python -c \"import os,django; os.environ.setdefault\\('DJANGO_SETTINGS_MODULE','core.settings'\\); django.setup\\(\\); from django.conf import settings; print\\(settings.DATABASES\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(grep -rhoE \"api\\\\.\\(get|post|put|patch|delete\\)\\\\\\(\\\\`[^\\\\`]+\" .)",
+      "Bash(sed -E \"s/api\\\\.\\(get|post|put|patch|delete\\)\\\\\\(\\\\`/\\\\1 /\")"
     ]
   }
 }

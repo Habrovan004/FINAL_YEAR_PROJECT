@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
-from .models import User, ProviderProfile
+from .models import User, ProviderProfile, PasswordResetCode
 
 # Custom forms for UserAdmin to handle phone_number instead of username
 class UserAdminCreationForm(UserCreationForm):
@@ -50,3 +50,10 @@ class ProviderProfileAdmin(admin.ModelAdmin):
     list_filter = ('hospital', 'specialization', 'is_available')
     search_fields = ('user__full_name', 'user__phone_number', 'hospital__name')
     raw_id_fields = ('user', 'hospital') # Use raw_id_fields for FKs to avoid dropdown performance issues
+
+@admin.register(PasswordResetCode)
+class PasswordResetCodeAdmin(admin.ModelAdmin):
+    list_display = ('user', 'code', 'created_at', 'expires_at', 'is_used')
+    list_filter = ('is_used',)
+    search_fields = ('user__full_name', 'user__phone_number', 'code')
+    readonly_fields = ('created_at',)

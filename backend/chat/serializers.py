@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import ChatRoom, Message, VideoConsultation
+from .models import ChatRoom, Message
 
 
 class MessageSerializer(serializers.ModelSerializer):
@@ -46,10 +46,3 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         if not user:
             return 0
         return obj.messages.filter(is_read=False).exclude(sender=user).count()
-
-
-class VideoConsultationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VideoConsultation
-        fields = ('id', 'room', 'meeting_id', 'start_time', 'is_active')
-        read_only_fields = ('id', 'start_time')

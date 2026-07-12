@@ -423,6 +423,7 @@ export default function EmergencyPage() {
           >
             <X size={14} /> {t('close_alert')}
           </button>
+          <p className="emg-close-hint">{t('close_alert_hint')}</p>
         </div>
       </PageWrapper>
     )

@@ -27,6 +27,10 @@ frontend/.env.production
 # Environment variables
 backend/.env
 
+# Local Claude Code tool-permission allowlist — has previously accumulated
+# hardcoded local credentials in permission strings; treat like a .env file.
+.claude/settings.local.json
+
 # Local-only throwaway dev settings (SQLite fallback while Postgres is being set up)
 backend/config/settings_dev_sqlite.py
 backend/db_dev_sqlite.sqlite3

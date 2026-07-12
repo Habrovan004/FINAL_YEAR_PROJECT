@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import MoodLog, Symptom, SymptomReport
+from .models import MoodLog, Symptom
 
 class SymptomSerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,13 +23,3 @@ class MoodLogSerializer(serializers.ModelSerializer):
         names = {s.id: s.name for s in Symptom.objects.filter(id__in=symptom_ids)}
         data['symptoms'] = [names.get(s, s) for s in (instance.symptoms or [])]
         return data
-
-class SymptomReportSerializer(serializers.ModelSerializer):
-    patient_name = serializers.CharField(source='patient.full_name', read_only=True)
-    symptom_details = SymptomSerializer(source='symptoms', many=True, read_only=True)
-    risk_display = serializers.CharField(source='get_risk_level_display', read_only=True)
-
-    class Meta:
-        model = SymptomReport
-        fields = '__all__'
-        read_only_fields = ['patient', 'risk_level', 'clinical_recommendation', 'created_at', 'is_reviewed']

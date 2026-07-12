@@ -50,6 +50,8 @@ const EMPTY_ANC: ANCForm = {
 
 export interface ANCSaveResponse {
   id: number
+  patient: number
+  patient_name: string
   risk_level: 'low' | 'medium' | 'high'
   risk_reasons: string[]
 }
@@ -161,8 +163,8 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
 
   const submit = async () => {
     setSubmitAttempted(true)
-    setServerError('')
     if (Object.keys(errors).length > 0) {
+      setServerError('Please fill in the required Vitals fields (patient, weight, blood pressure, gestational age) before saving.')
       // Scroll to first error
       if (errors.patient_id || errors.weight_kg || errors.gestational_age_weeks
         || errors.blood_pressure_systolic || errors.blood_pressure_diastolic) {
@@ -170,9 +172,11 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
       }
       return
     }
+    setServerError('')
     setSaving(true)
     try {
       const numOrNull = (v: string) => (v === '' || v == null ? null : Number(v))
+      const intOrNull = (v: string) => (v === '' || v == null ? null : Math.round(Number(v)))
       const payload: Record<string, unknown> = {
         patient: parseInt(form.patient_id),
         weight_kg: parseFloat(form.weight_kg),
@@ -180,7 +184,10 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
         blood_pressure_diastolic: parseInt(form.blood_pressure_diastolic),
         gestational_age_weeks: parseInt(form.gestational_age_weeks),
         fundal_height_cm: numOrNull(form.fundal_height_cm),
-        fetal_heart_rate_bpm: numOrNull(form.fetal_heart_rate_bpm),
+        // fetal_heart_rate_bpm is an IntegerField on the backend — the number
+        // input has no step restriction, so a decimal like "140.5" typed here
+        // would otherwise be sent as a float and rejected with a raw DRF error.
+        fetal_heart_rate_bpm: intOrNull(form.fetal_heart_rate_bpm),
         is_multiple_pregnancy: form.is_multiple_pregnancy,
         urine_protein: form.urine_protein,
         urine_glucose: form.urine_glucose,
@@ -307,6 +314,7 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
                 <input
                   id="anc-ga"
                   type="number"
+                  step="1"
                   inputMode="numeric"
                   className={inputClass('gestational_age_weeks')}
                   value={form.gestational_age_weeks}
@@ -321,6 +329,7 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
                 <input
                   id="anc-sys"
                   type="number"
+                  step="1"
                   inputMode="numeric"
                   className={inputClass('blood_pressure_systolic')}
                   value={form.blood_pressure_systolic}
@@ -335,6 +344,7 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
                 <input
                   id="anc-dia"
                   type="number"
+                  step="1"
                   inputMode="numeric"
                   className={inputClass('blood_pressure_diastolic')}
                   value={form.blood_pressure_diastolic}
@@ -361,6 +371,7 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
                 <input
                   id="anc-fhr"
                   type="number"
+                  step="1"
                   inputMode="numeric"
                   className="anc-field"
                   value={form.fetal_heart_rate_bpm}

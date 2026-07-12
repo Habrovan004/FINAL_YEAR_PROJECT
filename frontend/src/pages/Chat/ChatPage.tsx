@@ -28,6 +28,23 @@ interface ChatbotStatus {
   model: string
 }
 
+interface DirectMessage {
+  id: number
+  sender: number
+  sender_name: string
+  text: string
+  is_read: boolean
+  is_own: boolean
+  created_at: string
+}
+
+interface ChatRoomRow {
+  id: number
+  provider_name: string
+  last_message: { text: string; sender_id: number; created_at: string } | null
+  unread_count: number
+}
+
 export default function ChatPage() {
   const nav = useNavigate()
   const { i18n, t } = useTranslation()
@@ -41,7 +58,19 @@ export default function ChatPage() {
   const [status, setStatus] = useState<ChatbotStatus | null>(null)
   const [sendError, setSendError] = useState('')
 
+  const [mode, setMode] = useState<'ai' | 'direct'>('ai')
+  const [room, setRoom] = useState<ChatRoomRow | null>(null)
+  const [noProviderAssigned, setNoProviderAssigned] = useState(false)
+  const [roomLoading, setRoomLoading] = useState(true)
+  const [roomMessages, setRoomMessages] = useState<DirectMessage[]>([])
+  const [nextBefore, setNextBefore] = useState<number | null>(null)
+  const [hasMoreOlder, setHasMoreOlder] = useState(false)
+  const [directText, setDirectText] = useState('')
+  const [directSending, setDirectSending] = useState(false)
+  const [roomLoadedOnce, setRoomLoadedOnce] = useState(false)
+
   const pollRef = useRef<number | null>(null)
+  const directPollRef = useRef<number | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   // ── Health-check the AI on mount so we can show the Online / Offline pill.
@@ -123,6 +152,86 @@ export default function ChatPage() {
     }
   }
 
+  // ── Direct provider chat (separate from the AI thread above) ──
+  // A mother's room with her assigned provider is created (or fetched, if it
+  // already exists) the moment she opens this tab — no separate "start chat"
+  // step. If she has no assigned provider, the backend 400s with a
+  // recognizable error code and we show a distinct empty state for that.
+  const loadRoom = async () => {
+    setRoomLoading(true)
+    setNoProviderAssigned(false)
+    try {
+      const r = await api.post<ChatRoomRow>('/chat/rooms/')
+      setRoom(r.data)
+      await api.post(`/chat/rooms/${r.data.id}/mark-read/`).catch(() => {})
+      const m = await api.get(`/chat/rooms/${r.data.id}/messages/`)
+      setRoomMessages(m.data.results || [])
+      setHasMoreOlder(Boolean(m.data.has_more))
+      setNextBefore(m.data.next_before ?? null)
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      if (err.response?.data?.error === 'no_provider_assigned') {
+        setNoProviderAssigned(true)
+      }
+      setRoom(null)
+    } finally {
+      setRoomLoading(false)
+    }
+  }
+
+  const refreshRoomMessages = async () => {
+    if (!room) return
+    try {
+      const m = await api.get(`/chat/rooms/${room.id}/messages/`)
+      setRoomMessages(m.data.results || [])
+      setHasMoreOlder(Boolean(m.data.has_more))
+      setNextBefore(m.data.next_before ?? null)
+    } catch { /* ignore */ }
+  }
+
+  const loadOlderRoomMessages = async () => {
+    if (!room || !nextBefore) return
+    try {
+      const m = await api.get(`/chat/rooms/${room.id}/messages/?before=${nextBefore}`)
+      setRoomMessages(prev => [...(m.data.results || []), ...prev])
+      setHasMoreOlder(Boolean(m.data.has_more))
+      setNextBefore(m.data.next_before ?? null)
+    } catch { /* ignore */ }
+  }
+
+  useEffect(() => {
+    if (mode === 'direct' && !roomLoadedOnce) {
+      setRoomLoadedOnce(true)
+      void loadRoom()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, roomLoadedOnce])
+
+  useEffect(() => {
+    if (mode !== 'direct' || !room) return
+    directPollRef.current = window.setInterval(() => void refreshRoomMessages(), 4000)
+    return () => { if (directPollRef.current) window.clearInterval(directPollRef.current) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, room?.id])
+
+  useEffect(() => {
+    if (mode === 'direct') bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [mode, roomMessages.length])
+
+  const sendDirect = async () => {
+    if (!room || !directText.trim() || directSending) return
+    setDirectSending(true)
+    try {
+      const r = await api.post(`/chat/rooms/${room.id}/messages/`, { text: directText })
+      setDirectText('')
+      setRoomMessages(prev => [...prev, r.data])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDirectSending(false)
+    }
+  }
+
   if (loading || !convo) {
     return (
       <div className="chat-page chat-loading">
@@ -173,82 +282,162 @@ export default function ChatPage() {
         </div>
       </header>
 
-      {/* Always-on disclaimer just below the header */}
-      <div className="chat-disclaimer" role="note">
-        <ShieldAlert size={14} />
-        <span>{t('chat_disclaimer')}</span>
+      <div className="chat-tab-bar" role="tablist" aria-label="Chat mode">
+        <button
+          type="button" role="tab" aria-selected={mode === 'ai'}
+          className={`chat-tab ${mode === 'ai' ? 'is-active' : ''}`}
+          onClick={() => setMode('ai')}
+        >
+          <Sparkles size={13} /> {t('chat_tab_ai')}
+        </button>
+        <button
+          type="button" role="tab" aria-selected={mode === 'direct'}
+          className={`chat-tab ${mode === 'direct' ? 'is-active' : ''}`}
+          onClick={() => setMode('direct')}
+        >
+          <Stethoscope size={13} /> {t('chat_tab_provider')}
+          {room && room.unread_count > 0 && <span className="chat-tab-badge">{room.unread_count}</span>}
+        </button>
       </div>
 
-      {!aiAvailable && !isLive && (
-        <div className="chat-warning-banner" role="status">
-          <WifiOff size={14} />
-          <span>{t('ai_unavailable_banner')}</span>
-        </div>
-      )}
-
-      {convo.escalated_at && (
-        <div className="chat-escalation-banner">
-          <AlertCircle size={14} />
-          <span>{t('escalated_banner')}</span>
-        </div>
-      )}
-
-      <main className="chat-body">
-        {convo.messages.map(m => {
-          const fromMe = m.sender_type === 'mother'
-          const label =
-            m.sender_type === 'chatbot' ? t('health_assistant').toUpperCase()
-              : m.sender_type === 'provider' ? (m.sender_name?.toUpperCase() || t('provider').toUpperCase())
-                : t('you').toUpperCase()
-          return (
-            <div key={m.id} className={`bubble-wrap ${fromMe ? 'me' : 'other'}`}>
-              <div className={`bubble bubble-${m.sender_type}`}>
-                <p className="bubble-label">
-                  {m.sender_type === 'chatbot' && <Sparkles size={9} />}
-                  {m.sender_type === 'provider' && <Stethoscope size={9} />}
-                  {label}
-                  {m.triggered_escalation && ` • ${t('escalated_tag')}`}
-                </p>
-                <p className="bubble-text">{m.content}</p>
-              </div>
-            </div>
-          )
-        })}
-
-        {showTyping && (
-          <div className="bubble-wrap other" aria-live="polite" aria-label={t('chat_typing')}>
-            <div className="bubble bubble-chatbot typing-bubble">
-              <p className="bubble-label"><Sparkles size={9} /> {t('health_assistant').toUpperCase()}</p>
-              <div className="typing-dots" aria-hidden="true">
-                <span className="typing-dot" />
-                <span className="typing-dot" />
-                <span className="typing-dot" />
-              </div>
-            </div>
+      {mode === 'ai' ? (
+        <>
+          {/* Always-on disclaimer just below the header */}
+          <div className="chat-disclaimer" role="note">
+            <ShieldAlert size={14} />
+            <span>{t('chat_disclaimer')}</span>
           </div>
-        )}
 
-        <div ref={bottomRef} />
-      </main>
+          {!aiAvailable && !isLive && (
+            <div className="chat-warning-banner" role="status">
+              <WifiOff size={14} />
+              <span>{t('ai_unavailable_banner')}</span>
+            </div>
+          )}
 
-      {sendError && (
-        <div className="chat-error" role="alert">
-          <AlertCircle size={14} /> <span>{sendError}</span>
-        </div>
+          {convo.escalated_at && (
+            <div className="chat-escalation-banner">
+              <AlertCircle size={14} />
+              <span>{t('escalated_banner')}</span>
+            </div>
+          )}
+
+          <main className="chat-body">
+            {convo.messages.map(m => {
+              const fromMe = m.sender_type === 'mother'
+              const label =
+                m.sender_type === 'chatbot' ? t('health_assistant').toUpperCase()
+                  : m.sender_type === 'provider' ? (m.sender_name?.toUpperCase() || t('provider').toUpperCase())
+                    : t('you').toUpperCase()
+              return (
+                <div key={m.id} className={`bubble-wrap ${fromMe ? 'me' : 'other'}`}>
+                  <div className={`bubble bubble-${m.sender_type}`}>
+                    <p className="bubble-label">
+                      {m.sender_type === 'chatbot' && <Sparkles size={9} />}
+                      {m.sender_type === 'provider' && <Stethoscope size={9} />}
+                      {label}
+                      {m.triggered_escalation && ` • ${t('escalated_tag')}`}
+                    </p>
+                    <p className="bubble-text">{m.content}</p>
+                  </div>
+                </div>
+              )
+            })}
+
+            {showTyping && (
+              <div className="bubble-wrap other" aria-live="polite" aria-label={t('chat_typing')}>
+                <div className="bubble bubble-chatbot typing-bubble">
+                  <p className="bubble-label"><Sparkles size={9} /> {t('health_assistant').toUpperCase()}</p>
+                  <div className="typing-dots" aria-hidden="true">
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                    <span className="typing-dot" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={bottomRef} />
+          </main>
+
+          {sendError && (
+            <div className="chat-error" role="alert">
+              <AlertCircle size={14} /> <span>{sendError}</span>
+            </div>
+          )}
+
+          <footer className="chat-footer">
+            <input
+              className="chat-input"
+              placeholder={isLive ? t('chat_placeholder_provider') : t('chat_placeholder_ai')}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') void send() }}
+            />
+            <button className="chat-send" onClick={() => void send()} disabled={sending || !text.trim()} aria-label={t('send')}>
+              {sending ? <Loader2 className="chat-spin" size={16} /> : <Send size={16} />}
+            </button>
+          </footer>
+        </>
+      ) : (
+        <>
+          <main className="chat-body">
+            {roomLoading ? (
+              <div className="chat-loading" style={{ height: 200 }}>
+                <Loader2 className="chat-spin" size={24} />
+              </div>
+            ) : noProviderAssigned ? (
+              <p className="provider-empty" style={{ padding: '24px 12px', textAlign: 'center' }}>
+                {t('chat_no_provider_assigned')}
+              </p>
+            ) : !room ? (
+              <p className="provider-empty" style={{ padding: '24px 12px', textAlign: 'center' }}>
+                {t('chat_no_room_yet')}
+              </p>
+            ) : (
+              <>
+                {hasMoreOlder && (
+                  <button type="button" className="chat-load-earlier" onClick={() => void loadOlderRoomMessages()}>
+                    {t('chat_load_earlier')}
+                  </button>
+                )}
+                {roomMessages.length === 0 && (
+                  <p className="provider-empty" style={{ padding: '24px 12px', textAlign: 'center' }}>
+                    {t('chat_start_conversation_hint')}
+                  </p>
+                )}
+                {roomMessages.map(m => (
+                  <div key={m.id} className={`bubble-wrap ${m.is_own ? 'me' : 'other'}`}>
+                    <div className={`bubble ${m.is_own ? 'bubble-mother' : 'bubble-provider'}`}>
+                      <p className="bubble-label">
+                        {!m.is_own && <Stethoscope size={9} />}
+                        {m.is_own ? t('you').toUpperCase() : (room.provider_name || t('provider')).toUpperCase()}
+                      </p>
+                      <p className="bubble-text">{m.text}</p>
+                    </div>
+                  </div>
+                ))}
+                <div ref={bottomRef} />
+              </>
+            )}
+          </main>
+
+          {!noProviderAssigned && !roomLoading && (
+            <footer className="chat-footer">
+              <input
+                className="chat-input"
+                placeholder={t('chat_placeholder_provider')}
+                value={directText}
+                onChange={e => setDirectText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void sendDirect() }}
+              />
+              <button className="chat-send" onClick={() => void sendDirect()} disabled={directSending || !directText.trim()} aria-label={t('send')}>
+                {directSending ? <Loader2 className="chat-spin" size={16} /> : <Send size={16} />}
+              </button>
+            </footer>
+          )}
+        </>
       )}
-
-      <footer className="chat-footer">
-        <input
-          className="chat-input"
-          placeholder={isLive ? t('chat_placeholder_provider') : t('chat_placeholder_ai')}
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') void send() }}
-        />
-        <button className="chat-send" onClick={() => void send()} disabled={sending || !text.trim()} aria-label={t('send')}>
-          {sending ? <Loader2 className="chat-spin" size={16} /> : <Send size={16} />}
-        </button>
-      </footer>
     </div>
   )
 }

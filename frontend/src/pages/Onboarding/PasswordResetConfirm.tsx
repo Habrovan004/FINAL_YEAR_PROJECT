@@ -21,7 +21,7 @@ export default function PasswordResetConfirm(){
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const codeIsValid = /^\d{6}$/.test(code)
-  const passwordIsValid = newPass.length >= 8
+  const passwordIsValid = newPass.length >= 6
   const passwordsMatch = newPass === confirmPass
 
   const handleConfirm = async (e: React.FormEvent) =>{

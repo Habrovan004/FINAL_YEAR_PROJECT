@@ -4,6 +4,13 @@ import axios from 'axios'
 import api from '../api/client'
 import { setAccessToken } from '../api/tokenStore'
 
+// Session-bootstrap refresh is idempotent per page load — cache the in-flight
+// promise at module scope (not component state) so React.StrictMode's dev-only
+// double-invoke of this effect reuses the same request instead of firing a
+// second concurrent POST with the same not-yet-rotated refresh cookie, which
+// would otherwise race the first request to rotate/blacklist it server-side.
+let bootstrapRefresh: Promise<{ data: { access: string } }> | null = null
+
 interface User {
   id: number
   full_name: string
@@ -34,6 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
+
     // The access token only ever lives in memory, so a page reload loses it.
     // Recover a session by exchanging the httpOnly refresh cookie (if any).
     // Must bypass `api`'s 401-retry interceptor: a visitor with no cookie
@@ -41,18 +50,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // `api` would make the interceptor "retry" this exact call, also get
     // 401, and force a redirect to '/', which remounts this effect and
     // loops forever.
-    axios.post(
-      `${import.meta.env.VITE_API_URL}/auth/token/refresh/`, {}, { withCredentials: true }
-    )
+    if (!bootstrapRefresh) {
+      bootstrapRefresh = axios.post(
+        `${import.meta.env.VITE_API_URL}/auth/token/refresh/`, {}, { withCredentials: true }
+      )
+    }
+
+    bootstrapRefresh
         .then(r => {
+          if (cancelled) return
           setAccessToken(r.data.access)
-          return api.get('/auth/me/')
+          return api.get('/auth/me/').then(res => setUser(res.data))
         })
-        .then(r => setUser(r.data))
         .catch(() => {
-          setAccessToken(null)
+          if (!cancelled) setAccessToken(null)
         })
-        .finally(() => setIsLoading(false))
+        .finally(() => {
+          if (!cancelled) setIsLoading(false)
+        })
+
+    return () => { cancelled = true }
   }, [])
 
   const login = async (phone_number: string, password: string) => {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Globe, Bell, Headset, Type, Shield, Loader2 } from 'lucide-react'
 import api from '../../api/client'
 
@@ -13,6 +14,7 @@ interface ProfileSettings {
 
 export default function SettingsPage() {
   const nav = useNavigate()
+  const { t, i18n } = useTranslation()
   const [profile, setProfile] = useState<ProfileSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -40,11 +42,11 @@ export default function SettingsPage() {
       setProfile(response.data)
     } catch (e) {
       console.error('Error fetching settings', e)
-      setError('Could not load your settings. Please try again.')
+      setError(t('settings_load_error'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     const profileTimer = window.setTimeout(() => {
@@ -65,7 +67,7 @@ export default function SettingsPage() {
     } catch (e) {
       console.error(e)
       setProfile(profile)
-      setError('Failed to save setting. Please try again.')
+      setError(t('settings_save_error'))
     } finally {
       setSaving(false)
     }
@@ -80,7 +82,7 @@ export default function SettingsPage() {
           <button onClick={() => nav('/profile')} className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-xl font-bold">App Settings</h1>
+          <h1 className="text-xl font-bold">{t('settings_title')}</h1>
           <div className="w-10 flex justify-center">
             {saving && <Loader2 size={16} className="text-rose-400 animate-spin" />}
           </div>
@@ -95,22 +97,25 @@ export default function SettingsPage() {
 
           {/* Language Section */}
           <section>
-            <h3 className="font-bold text-xs text-gray-400 uppercase tracking-widest mb-3 pl-1">Localization</h3>
+            <h3 className="font-bold text-xs text-gray-400 uppercase tracking-widest mb-3 pl-1">{t('settings_section_localization')}</h3>
             <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
                   <Globe size={20} className="text-blue-500" />
                 </div>
                 <div>
-                  <p className="font-bold text-sm">Language</p>
-                  <p className="text-[10px] text-gray-400">Lugha ya mfumo</p>
+                  <p className="font-bold text-sm">{t('settings_language_label')}</p>
+                  <p className="text-[10px] text-gray-400">{t('settings_language_sub')}</p>
                 </div>
               </div>
               <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
                 {['en', 'sw'].map(lang => (
-                  <button 
+                  <button
                     key={lang}
-                    onClick={() => updateSetting('language', lang)}
+                    onClick={() => {
+                      void i18n.changeLanguage(lang)
+                      updateSetting('language', lang)
+                    }}
                     className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${profile?.language === lang ? 'bg-white shadow text-gray-800' : 'text-gray-400'}`}
                   >
                     {lang === 'en' ? 'English' : 'Swahili'}
@@ -122,29 +127,29 @@ export default function SettingsPage() {
 
           {/* Preferences Section */}
           <section>
-            <h3 className="font-bold text-xs text-gray-400 uppercase tracking-widest mb-3 pl-1">Preferences</h3>
+            <h3 className="font-bold text-xs text-gray-400 uppercase tracking-widest mb-3 pl-1">{t('settings_section_preferences')}</h3>
             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 divide-y divide-gray-50 overflow-hidden">
               {[
-                { 
-                  key: 'notifications_enabled', 
-                  icon: Bell, 
-                  color: 'rose' as const, 
-                  label: 'Notifications', 
-                  sub: 'Weekly updates & reminders' 
+                {
+                  key: 'notifications_enabled',
+                  icon: Bell,
+                  color: 'rose' as const,
+                  label: t('settings_notifications_label'),
+                  sub: t('settings_notifications_sub')
                 },
-                { 
-                  key: 'audio_guidance', 
-                  icon: Headset, 
-                  color: 'purple' as const, 
-                  label: 'Audio Guidance', 
-                  sub: 'Voice support for learning' 
+                {
+                  key: 'audio_guidance',
+                  icon: Headset,
+                  color: 'purple' as const,
+                  label: t('audio_guidance'),
+                  sub: t('prefs_audio_sub')
                 },
-                { 
-                  key: 'large_text_mode', 
-                  icon: Type, 
+                {
+                  key: 'large_text_mode',
+                  icon: Type,
                   color: 'orange' as const,
-                  label: 'Large Text Mode', 
-                  sub: 'Improved readability' 
+                  label: t('settings_large_text_label'),
+                  sub: t('settings_large_text_sub')
                 }
               ].map(({ key, icon: Icon, color, label, sub }) => (
                 <div key={key} className="p-5 flex items-center justify-between">
@@ -170,15 +175,15 @@ export default function SettingsPage() {
 
           {/* Account Security Section */}
           <section>
-            <h3 className="font-bold text-xs text-gray-400 uppercase tracking-widest mb-3 pl-1">Security</h3>
+            <h3 className="font-bold text-xs text-gray-400 uppercase tracking-widest mb-3 pl-1">{t('settings_section_security')}</h3>
             <button className="bg-white w-full p-5 rounded-3xl flex items-center justify-between shadow-sm border border-gray-100 active:bg-gray-50 transition-colors">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
                   <Shield size={20} className="text-gray-400" />
                 </div>
                 <div>
-                  <p className="font-bold text-sm">Change Password</p>
-                  <p className="text-[10px] text-gray-400">Keep your account secure</p>
+                  <p className="font-bold text-sm">{t('settings_change_password')}</p>
+                  <p className="text-[10px] text-gray-400">{t('settings_change_password_sub')}</p>
                 </div>
               </div>
               <ArrowLeft className="rotate-180 text-gray-300" size={16} />

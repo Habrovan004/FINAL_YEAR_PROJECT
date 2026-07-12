@@ -131,7 +131,10 @@ export default function ProfilePage() {
   const pregnancySummary = week
     ? t('profile_week_due', { week, date: formatDate(dueDate) })
     : t('profile_due_only', { date: formatDate(dueDate) })
-  const languageLabel = profile?.language === 'sw' ? t('profile_lang_sw') : t('profile_lang_en')
+  // Derive from the live i18n language (what's actually on screen right now),
+  // not the backend profile field — the two can briefly disagree if a PATCH
+  // is still in flight or failed silently.
+  const languageLabel = locale === 'sw-TZ' ? t('profile_lang_sw') : t('profile_lang_en')
   const notificationsOn = profile?.notifications_enabled !== false
 
   if (loading) {

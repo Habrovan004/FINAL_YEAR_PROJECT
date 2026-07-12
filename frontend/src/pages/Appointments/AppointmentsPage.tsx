@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Clock, Building2, ChevronDown, CalendarPlus, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Clock, Building2, ChevronDown, CalendarPlus, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
@@ -16,6 +16,13 @@ interface Appointment {
   what_to_bring: string
 }
 
+// The 'completed' tab is a frontend-only label — the backend's actual filter
+// vocabulary is upcoming/history/requested (there's no 'completed' status).
+const BACKEND_FILTER: Record<'upcoming' | 'completed', string> = {
+  upcoming: 'upcoming',
+  completed: 'history',
+}
+
 type TabKey = 'upcoming' | 'completed' | 'book'
 
 export default function AppointmentsPage() {
@@ -28,18 +35,34 @@ export default function AppointmentsPage() {
   const [expanded, setExpanded] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [cancellingId, setCancellingId] = useState<number | null>(null)
 
   const fetchAppointments = async () => {
     setLoading(true)
     setError('')
     try {
-      const response = await api.get(`/appointments/?filter=${tab}`)
+      const backendFilter = BACKEND_FILTER[tab as 'upcoming' | 'completed']
+      const response = await api.get(`/appointments/?filter=${backendFilter}`)
       setAppointments(response.data)
     } catch (e) {
       console.error('Error fetching appointments:', e)
       setError(t('appts_err_load'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const cancelAppointment = async (id: number) => {
+    if (!window.confirm(t('appts_cancel_confirm'))) return
+    setCancellingId(id)
+    try {
+      await api.patch(`/appointments/${id}/`, { status: 'cancelled' })
+      await fetchAppointments()
+    } catch (e) {
+      console.error('Error cancelling appointment:', e)
+      setError(t('appts_err_save'))
+    } finally {
+      setCancellingId(null)
     }
   }
 
@@ -71,6 +94,7 @@ export default function AppointmentsPage() {
   }
 
   const statusLabel = (status: string) => {
+    if (status === 'requested') return t('appts_status_requested')
     if (status === 'upcoming') return t('appts_status_upcoming')
     if (status === 'completed') return t('appts_status_completed')
     if (status === 'cancelled') return t('appts_status_cancelled')
@@ -121,7 +145,9 @@ export default function AppointmentsPage() {
           <div className="space-y-4">
             {appointments.map(a => (
               <div key={a.id} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 relative overflow-hidden">
-                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${a.status === 'upcoming' ? 'bg-rose-400' : 'bg-green-400'}`} />
+                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${
+                  a.status === 'requested' ? 'bg-amber-400' : a.status === 'upcoming' ? 'bg-rose-400' : 'bg-green-400'
+                }`} />
 
                 <div className="flex justify-between items-start mb-3">
                   <div>
@@ -129,7 +155,8 @@ export default function AppointmentsPage() {
                     <h3 className="font-bold text-lg mt-0.5">{formatDate(a.appointment_date)}</h3>
                   </div>
                   <span className={`text-[10px] px-2.5 py-1 rounded-full font-bold uppercase ${
-                    a.status === 'upcoming' ? 'bg-rose-50 text-rose-500' : 'bg-green-50 text-green-500'
+                    a.status === 'requested' ? 'bg-amber-50 text-amber-600'
+                      : a.status === 'upcoming' ? 'bg-rose-50 text-rose-500' : 'bg-green-50 text-green-500'
                   }`}>
                     {statusLabel(a.status)}
                   </span>
@@ -153,6 +180,17 @@ export default function AppointmentsPage() {
                   {t('appts_prep_guide')}
                   <ChevronDown size={14} className={`transition-transform duration-300 ${expanded === a.id ? 'rotate-180' : ''}`} />
                 </button>
+
+                {(a.status === 'requested' || a.status === 'upcoming') && (
+                  <button
+                    onClick={() => void cancelAppointment(a.id)}
+                    disabled={cancellingId === a.id}
+                    className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-bold text-red-500 bg-red-50 rounded-xl px-4 py-2.5 active:bg-red-100 transition-colors disabled:opacity-50"
+                  >
+                    {cancellingId === a.id ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+                    {t('appts_cancel')}
+                  </button>
+                )}
 
                 {expanded === a.id && (
                   <div className="mt-2 p-4 bg-gray-50 rounded-2xl animate-in slide-in-from-top-2 duration-300">

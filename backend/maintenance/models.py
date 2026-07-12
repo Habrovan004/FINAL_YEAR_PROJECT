@@ -27,16 +27,3 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"{self.get_event_type_display()} at {self.timestamp}"
-
-class SystemMaintenance(models.Model):
-    objects = models.Manager()
-
-    last_backup_at = models.DateTimeField(null=True, blank=True)
-    backup_status = models.CharField(max_length=20, default='pending')
-    db_size_mb = models.FloatField(default=0.0)
-    server_status = models.CharField(max_length=20, default='healthy')
-    
-    last_security_patch = models.DateField(null=True, blank=True)
-    
-    def __str__(self):
-        return f"System Health: {self.server_status} (Last Backup: {self.last_backup_at})"

@@ -9,7 +9,9 @@ medication-adherence check-in.
 
 Access rules:
   - A provider may create a room only for a patient assigned to them.
-  - A patient may view/post in any room where they are the `patient`.
+  - A patient may create a room only with her own assigned provider (no
+    `patient_id` needed — resolved from her profile), and may view/post in
+    any room where they are the `patient`.
   - Either party may mark received messages as read.
 """
 from django.shortcuts import get_object_or_404
@@ -19,6 +21,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.models import User
+from notifications.models import Notification
 from .models import ChatRoom, Message
 from .serializers import ChatRoomSerializer, MessageSerializer
 
@@ -38,38 +41,50 @@ def _room_for_user(user, room_id):
 def rooms(request):
     """
     GET  /api/chat/rooms/        — list the caller's active rooms (newest first)
-    POST /api/chat/rooms/        — provider creates (or gets) a room with a patient
-                                   body: { "patient_id": <int> }
+    POST /api/chat/rooms/        — create (or get) a room with the other party
+                                   provider caller body: { "patient_id": <int> }
+                                   patient caller: no body needed, uses her
+                                   assigned provider
     """
     user = request.user
 
     if request.method == 'POST':
-        if user.user_type != 'provider':
+        if user.user_type == 'provider':
+            patient_id = request.data.get('patient_id')
+            if not patient_id:
+                return Response({'error': 'patient_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            patient = get_object_or_404(User, pk=patient_id, user_type='patient')
+
+            # A provider can only chat with patients assigned to them.
+            provider_profile = getattr(user, 'provider_profile', None)
+            patient_profile = getattr(patient, 'profile', None)
+            if (
+                provider_profile is None
+                or patient_profile is None
+                or patient_profile.assigned_provider_id != provider_profile.id
+            ):
+                return Response(
+                    {'error': 'This patient is not assigned to you.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+            room, _ = ChatRoom.objects.get_or_create(patient=patient, provider=user)
             return Response(
-                {'error': 'Only providers can initiate a chat room.'},
-                status=status.HTTP_403_FORBIDDEN,
+                ChatRoomSerializer(room, context={'request': request}).data,
+                status=status.HTTP_201_CREATED,
             )
 
-        patient_id = request.data.get('patient_id')
-        if not patient_id:
-            return Response({'error': 'patient_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        patient = get_object_or_404(User, pk=patient_id, user_type='patient')
-
-        # A provider can only chat with patients assigned to them.
-        provider_profile = getattr(user, 'provider_profile', None)
-        patient_profile = getattr(patient, 'profile', None)
-        if (
-            provider_profile is None
-            or patient_profile is None
-            or patient_profile.assigned_provider_id != provider_profile.id
-        ):
+        # Patient caller — resolve her own assigned provider, no patient_id needed.
+        patient_profile = getattr(user, 'profile', None)
+        assigned_provider = patient_profile.assigned_provider if patient_profile else None
+        if assigned_provider is None:
             return Response(
-                {'error': 'This patient is not assigned to you.'},
-                status=status.HTTP_403_FORBIDDEN,
+                {'error': 'no_provider_assigned', 'detail': 'You do not have an assigned provider yet.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        room, _ = ChatRoom.objects.get_or_create(patient=patient, provider=user)
+        room, _ = ChatRoom.objects.get_or_create(patient=user, provider=assigned_provider.user)
         return Response(
             ChatRoomSerializer(room, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
@@ -102,6 +117,15 @@ def messages(request, room_id):
             return Response({'error': 'text is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         msg = Message.objects.create(room=room, sender=request.user, text=text)
+
+        recipient_id = room.provider_id if request.user.id == room.patient_id else room.patient_id
+        Notification.objects.create(
+            recipient_id=recipient_id,
+            verb='chat_message',
+            message=f'{request.user.full_name}: {text[:80]}',
+            link='/chat' if recipient_id == room.patient_id else '/provider/chats',
+        )
+
         return Response(
             MessageSerializer(msg, context={'request': request}).data,
             status=status.HTTP_201_CREATED,

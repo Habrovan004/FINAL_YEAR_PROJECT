@@ -41,6 +41,7 @@ def anc_visit_list(request):
 
         serializer = ANCVisitSerializer(data=request.data)
         if not serializer.is_valid():
+            logger.warning('ANC visit validation failed: %s | payload=%s', serializer.errors, request.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         try:
             serializer.save(provider=request.user)

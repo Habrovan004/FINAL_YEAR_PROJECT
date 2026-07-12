@@ -20,13 +20,8 @@ class ConfigurableWindowThrottle(AnonRateThrottle):
         self.rate = (self.num_requests, self.duration)
 
 
-class OTPRequestThrottle(AnonRateThrottle):
-    scope = 'otp_request'
-    rate = '5/min'
-
-
 class OTPVerifyThrottle(AnonRateThrottle):
-    """Prevents brute-forcing the 6-digit OTP (900k combinations)."""
+    """Prevents brute-forcing the 6-digit password-reset code (900k combinations)."""
     scope = 'otp_verify'
     rate = '10/min'
 
@@ -37,7 +32,7 @@ class LoginThrottle(ConfigurableWindowThrottle):
 
 
 class PasswordResetThrottle(ConfigurableWindowThrottle):
-    """Blunts brute-force account takeover via the no-OTP password reset."""
+    """Blunts SMS-bombing via repeated password-reset code requests."""
     scope = 'password_reset'
 
 

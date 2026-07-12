@@ -16,6 +16,7 @@ interface Contact {
   name: string
   phone_number: string
   relationship: string
+  is_primary: boolean
 }
 
 interface HospitalData {
@@ -49,8 +50,8 @@ interface QueuedAlert {
 // ── Constants ──────────────────────────────────────────────────────────────
 const LONG_PRESS_MS = 1500
 const QUEUE_KEY = 'pending_sos_alert'
-const TZ_EMERGENCY = '112'   // Tanzania universal emergency number
-const TZ_AMBULANCE = '112'
+const TZ_EMERGENCY = '112'   // Tanzania universal / ambulance emergency number
+const TZ_POLICE = '999'      // Tanzania Police Force — separate from 112
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const triggerHaptic = (pattern: number | number[] = 60) => {
@@ -86,9 +87,25 @@ export default function EmergencyPage() {
   const [sending, setSending] = useState(false)
   const [sosTriggered, setSosTriggered] = useState(false)
   const [providerName, setProviderName] = useState('')
+  const [providerPhone, setProviderPhone] = useState('')
   const [error, setError] = useState('')
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true)
   const [queued, setQueued] = useState(false)
+  // Real delivery signal from the backend (Africa's Talking's synchronous
+  // send-acknowledgement, not a confirmed-delivered-to-phone webhook — see
+  // emergency/sms.py). null until we know either way.
+  const [smsSent, setSmsSent] = useState<boolean | null>(null)
+  // True only when the trigger-sos POST itself failed (couldn't even confirm
+  // the alert was logged) — distinct from a logged alert whose SMS is unsent.
+  const [postFailed, setPostFailed] = useState(false)
+
+  const ackKind: 'queued' | 'sent' | 'unsent' | 'failed' = queued
+    ? 'queued'
+    : postFailed
+      ? 'failed'
+      : smsSent
+        ? 'sent'
+        : 'unsent'
 
   const pressTimerRef = useRef<number | null>(null)
   const pressFrameRef = useRef<number | null>(null)
@@ -226,15 +243,19 @@ export default function EmergencyPage() {
     try {
       const res = await api.post('/emergency/trigger-sos/', payload)
       setProviderName(res.data?.provider_name || t('emergency_center_default'))
+      setProviderPhone(res.data?.provider_phone || '')
       setInstructions(res.data?.instructions || [])
+      setSmsSent(Boolean(res.data?.is_sms_sent))
       setSosTriggered(true)
     } catch (e) {
       console.error('SOS POST failed:', e)
+      // Best-effort retry if the user goes offline/online again — but the
+      // alert was never confirmed logged, so the screen must say so plainly
+      // rather than implying it went through (see ackKind === 'failed').
       try {
         localStorage.setItem(QUEUE_KEY, JSON.stringify({ ...payload, queuedAt: Date.now() } as QueuedAlert))
-        setQueued(true)
       } catch { /* ignore */ }
-      setError(t('sos_post_failed'))
+      setPostFailed(true)
       // Still show the post-trigger screen — the call already went out.
       setSosTriggered(true)
     } finally {
@@ -278,23 +299,37 @@ export default function EmergencyPage() {
   // Cleanup on unmount
   useEffect(() => () => cancelPress(), [cancelPress])
 
+  // The mother's own primary emergency contact (falls back to the first
+  // saved contact if none is marked primary) — surfaced as a one-tap call
+  // option on the confirmation screen alongside the generic emergency number.
+  const primaryContact = useMemo(
+    () => contacts.find(c => c.is_primary) ?? contacts[0] ?? null,
+    [contacts],
+  )
+
+  // Personal contact / provider are kept as the most prominent call actions —
+  // 112 and 999 are national lines that aren't reliably tied to actual
+  // ambulance dispatch outside Dar es Salaam, so they're secondary/backup.
+  // Only promoted to primary styling if there's no personal option at all.
+  const hasPersonalContact = Boolean(primaryContact) || Boolean(providerPhone)
+
   // ── Quick contacts (police, ambulance, hospital, family) ────────────────
   const quickContacts = useMemo(() => {
     const list: { key: string; label: string; sublabel: string; tel: string; icon: typeof Phone; tone: 'red' | 'blue' | 'pink' }[] = [
       {
-        key: 'police',
-        label: t('police'),
+        key: 'ambulance',
+        label: t('ambulance'),
         sublabel: TZ_EMERGENCY,
         tel: TZ_EMERGENCY,
-        icon: Siren,
+        icon: Stethoscope,
         tone: 'red',
       },
       {
-        key: 'ambulance',
-        label: t('ambulance'),
-        sublabel: TZ_AMBULANCE,
-        tel: TZ_AMBULANCE,
-        icon: Stethoscope,
+        key: 'police',
+        label: t('police'),
+        sublabel: TZ_POLICE,
+        tel: TZ_POLICE,
+        icon: Siren,
         tone: 'red',
       },
     ]
@@ -345,14 +380,24 @@ export default function EmergencyPage() {
     return (
       <PageWrapper>
         <div className="emg-page">
-          <div className="emg-ack-card" role="alert">
-            <div className="emg-ack-icon">
-              <CheckCircle2 size={36} />
+          <div className={`emg-ack-card ${ackKind === 'unsent' ? 'tone-amber' : ackKind === 'failed' ? 'tone-error' : ''}`} role="alert">
+            <div className={`emg-ack-icon ${ackKind === 'unsent' ? 'tone-amber' : ackKind === 'failed' ? 'tone-error' : ''}`}>
+              {ackKind === 'unsent'
+                ? <AlertTriangle size={32} />
+                : ackKind === 'failed'
+                  ? <WifiOff size={32} />
+                  : <CheckCircle2 size={36} />}
             </div>
-            <h2 className="emg-ack-title">{queued ? t('sos_queued_title') : t('sos_sent_title')}</h2>
+            <h2 className="emg-ack-title">
+              {ackKind === 'queued' ? t('sos_queued_title')
+                : ackKind === 'failed' ? t('sos_failed_title')
+                : ackKind === 'unsent' ? t('sos_unsent_title')
+                : t('sos_sent_title')}
+            </h2>
             <p className="emg-ack-sub">
-              {queued
-                ? t('sos_queued_sub')
+              {ackKind === 'queued' ? t('sos_queued_sub')
+                : ackKind === 'failed' ? t('sos_failed_sub')
+                : ackKind === 'unsent' ? t('sos_unsent_sub')
                 : providerName
                   ? t('sos_sent_sub_with_provider', { provider: providerName })
                   : t('sos_sent_sub_generic')}
@@ -367,14 +412,50 @@ export default function EmergencyPage() {
             )}
           </div>
 
+          {/* Most prominent: the mother's own contact / assigned provider — */}
+          {/* these are more reliably reachable than national lines outside Dar. */}
+          {hasPersonalContact && (
+            <div className="emg-quick-row">
+              {primaryContact && (
+                <a
+                  className={`emg-quick-cta primary ${ackKind === 'unsent' || ackKind === 'failed' ? 'urgent' : ''} ${ackKind === 'unsent' ? 'tone-amber-cta' : ackKind === 'failed' ? 'tone-error-cta' : ''}`}
+                  href={`tel:${primaryContact.phone_number}`}
+                >
+                  <Heart size={18} /> {t('call_primary_contact', { name: primaryContact.name })}
+                </a>
+              )}
+              {providerPhone && (
+                <a
+                  className={`emg-quick-cta primary ${ackKind === 'unsent' || ackKind === 'failed' ? 'urgent' : ''} ${ackKind === 'unsent' ? 'tone-amber-cta' : ackKind === 'failed' ? 'tone-error-cta' : ''}`}
+                  href={`tel:${providerPhone}`}
+                >
+                  <Stethoscope size={18} /> {t('call_provider', { name: providerName })}
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Secondary / backup: national lines, always available but not */}
+          {/* the first thing to reach for outside Dar es Salaam. */}
+          <h3 className="emg-section-label">{t('backup_numbers')}</h3>
           <div className="emg-quick-row">
-            <a className="emg-quick-cta primary" href={`tel:${TZ_EMERGENCY}`}>
+            <a
+              className={`emg-quick-cta ${hasPersonalContact ? 'ghost' : 'primary'} ${!hasPersonalContact && (ackKind === 'unsent' || ackKind === 'failed') ? 'urgent' : ''} ${!hasPersonalContact && ackKind === 'unsent' ? 'tone-amber-cta' : !hasPersonalContact && ackKind === 'failed' ? 'tone-error-cta' : ''}`}
+              href={`tel:${TZ_EMERGENCY}`}
+            >
               <Phone size={18} /> {t('call_emergency', { number: TZ_EMERGENCY })}
             </a>
-            <button className="emg-quick-cta ghost" onClick={shareLocation}>
-              <Share2 size={18} /> {t('share_location')}
-            </button>
+            <a
+              className={`emg-quick-cta ${hasPersonalContact ? 'ghost' : 'primary'} ${!hasPersonalContact && (ackKind === 'unsent' || ackKind === 'failed') ? 'urgent' : ''} ${!hasPersonalContact && ackKind === 'unsent' ? 'tone-amber-cta' : !hasPersonalContact && ackKind === 'failed' ? 'tone-error-cta' : ''}`}
+              href={`tel:${TZ_POLICE}`}
+            >
+              <Siren size={18} /> {t('call_police', { number: TZ_POLICE })}
+            </a>
           </div>
+
+          <button className="emg-quick-cta ghost full-width" onClick={shareLocation}>
+            <Share2 size={18} /> {t('share_location')}
+          </button>
 
           <h3 className="emg-section-label"><Info size={14} /> {t('immediate_instructions')}</h3>
           <div className="emg-instr-list">
@@ -388,10 +469,11 @@ export default function EmergencyPage() {
 
           <button
             className="emg-cancel-btn"
-            onClick={() => { setSosTriggered(false); setQueued(false); setError('') }}
+            onClick={() => { setSosTriggered(false); setQueued(false); setError(''); setSmsSent(null); setPostFailed(false) }}
           >
             <X size={14} /> {t('close_alert')}
           </button>
+          <p className="emg-close-hint">{t('close_alert_hint')}</p>
         </div>
       </PageWrapper>
     )

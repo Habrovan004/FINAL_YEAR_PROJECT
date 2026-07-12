@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'chat',
     'medication',
     'maintenance',
+    'notifications',
 ]
 
 MIDDLEWARE = [
@@ -234,6 +235,11 @@ LOGGING = {
             'propagate': False,
         },
         'chatbot.views': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'clinical.views': {
             'handlers': ['console'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,

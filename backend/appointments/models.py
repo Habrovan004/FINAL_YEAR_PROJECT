@@ -12,6 +12,7 @@ class Appointment(models.Model):
         ('other', 'Other'),
     ]
     STATUS_CHOICES = [
+        ('requested', 'Requested'),
         ('upcoming', 'Upcoming'),
         ('attended', 'Attended'),
         ('missed', 'Missed'),
@@ -38,8 +39,18 @@ class Appointment(models.Model):
 
     class Meta:
         ordering = ['appointment_date', 'appointment_time']
-        # Rule: One appointment per provider at the same date/time
-        unique_together = ('provider', 'appointment_date', 'appointment_time')
+        # Rule: one *active* (pending or confirmed) appointment per provider
+        # at a given date/time. A partial constraint (rather than a plain
+        # unique_together on all rows) means a cancelled/missed/attended
+        # appointment doesn't permanently block that slot from ever being
+        # rebooked, since rows are never deleted.
+        constraints = [
+            models.UniqueConstraint(
+                fields=['provider', 'appointment_date', 'appointment_time'],
+                condition=models.Q(status__in=['requested', 'upcoming']),
+                name='unique_active_provider_slot',
+            )
+        ]
 
     def __str__(self):
         return f"{self.user.full_name} with {self.provider.full_name if self.provider else 'N/A'} on {self.appointment_date}"

@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Languages, Moon, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AuthProvider, useAuth, dashboardPathFor } from './context/AuthContext'
@@ -33,8 +32,6 @@ import ProviderDashboard from './pages/Provider/ProviderDashboard'
 import ProviderChatQueue from './pages/Provider/ProviderChatQueue'
 import NotificationBell from './components/layout/NotificationBell'
 import './App.css'
-
-const queryClient = new QueryClient()
 
 function Spinner() {
   return (
@@ -133,58 +130,56 @@ function GlobalControls() {
 
 function App() {
   return (
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <TextSizeProvider>
-            <AuthProvider>
-              <BrowserRouter>
-                <Routes>
-                  {/* ── Public routes ── */}
-                  <Route path="/" element={<Splash />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/password-reset/request" element={<PasswordResetRequest />} />
-                  <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />
-                  <Route path="/onboarding" element={<OnboardingFlow />} />
+      <ThemeProvider>
+        <TextSizeProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <Routes>
+                {/* ── Public routes ── */}
+                <Route path="/" element={<Splash />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/password-reset/request" element={<PasswordResetRequest />} />
+                <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />
+                <Route path="/onboarding" element={<OnboardingFlow />} />
 
-                  {/* ── Mother onboarding (hospital pick) ── */}
-                  <Route
-                      path="/onboarding/hospital"
-                      element={
-                        <OnboardingRoute>
-                          <SelectHospital />
-                        </OnboardingRoute>
-                      }
-                  />
+                {/* ── Mother onboarding (hospital pick) ── */}
+                <Route
+                    path="/onboarding/hospital"
+                    element={
+                      <OnboardingRoute>
+                        <SelectHospital />
+                      </OnboardingRoute>
+                    }
+                />
 
-                  {/* ── Mother (patient) routes ── */}
-                  <Route path="/home" element={<PrivateRoute allow={['patient']}><HomePage /></PrivateRoute>} />
-                  <Route path="/baby-growth" element={<PrivateRoute allow={['patient']}><BabyGrowthPage /></PrivateRoute>} />
-                  <Route path="/track" element={<PrivateRoute allow={['patient']}><TrackPage /></PrivateRoute>} />
-                  <Route path="/track/contractions" element={<PrivateRoute allow={['patient']}><ContractionTimerPage /></PrivateRoute>} />
-                  <Route path="/timeline" element={<PrivateRoute allow={['patient']}><TimelinePage /></PrivateRoute>} />
-                  <Route path="/learn" element={<PrivateRoute allow={['patient']}><LearnPage /></PrivateRoute>} />
-                  <Route path="/appointments" element={<PrivateRoute allow={['patient']}><AppointmentsPage /></PrivateRoute>} />
-                  <Route path="/profile" element={<PrivateRoute allow={['patient']}><ProfilePage /></PrivateRoute>} />
-                  <Route path="/profile/settings" element={<PrivateRoute allow={['patient']}><SettingsPage /></PrivateRoute>} />
-                  <Route path="/profile/preferences" element={<PrivateRoute allow={['patient']}><PreferencesPage /></PrivateRoute>} />
-                  <Route path="/profile/hospitals" element={<PrivateRoute allow={['patient']}><HospitalMap /></PrivateRoute>} />
-                  <Route path="/emergency" element={<PrivateRoute allow={['patient']}><EmergencyPage /></PrivateRoute>} />
-                  <Route path="/chat" element={<PrivateRoute allow={['patient']}><ChatPage /></PrivateRoute>} />
+                {/* ── Mother (patient) routes ── */}
+                <Route path="/home" element={<PrivateRoute allow={['patient']}><HomePage /></PrivateRoute>} />
+                <Route path="/baby-growth" element={<PrivateRoute allow={['patient']}><BabyGrowthPage /></PrivateRoute>} />
+                <Route path="/track" element={<PrivateRoute allow={['patient']}><TrackPage /></PrivateRoute>} />
+                <Route path="/track/contractions" element={<PrivateRoute allow={['patient']}><ContractionTimerPage /></PrivateRoute>} />
+                <Route path="/timeline" element={<PrivateRoute allow={['patient']}><TimelinePage /></PrivateRoute>} />
+                <Route path="/learn" element={<PrivateRoute allow={['patient']}><LearnPage /></PrivateRoute>} />
+                <Route path="/appointments" element={<PrivateRoute allow={['patient']}><AppointmentsPage /></PrivateRoute>} />
+                <Route path="/profile" element={<PrivateRoute allow={['patient']}><ProfilePage /></PrivateRoute>} />
+                <Route path="/profile/settings" element={<PrivateRoute allow={['patient']}><SettingsPage /></PrivateRoute>} />
+                <Route path="/profile/preferences" element={<PrivateRoute allow={['patient']}><PreferencesPage /></PrivateRoute>} />
+                <Route path="/profile/hospitals" element={<PrivateRoute allow={['patient']}><HospitalMap /></PrivateRoute>} />
+                <Route path="/emergency" element={<PrivateRoute allow={['patient']}><EmergencyPage /></PrivateRoute>} />
+                <Route path="/chat" element={<PrivateRoute allow={['patient']}><ChatPage /></PrivateRoute>} />
 
-                  {/* ── Provider routes ── */}
-                  <Route path="/provider/dashboard" element={<PrivateRoute allow={['provider']}><ProviderDashboard /></PrivateRoute>} />
-                  <Route path="/provider/chats" element={<PrivateRoute allow={['provider']}><ProviderChatQueue /></PrivateRoute>} />
+                {/* ── Provider routes ── */}
+                <Route path="/provider/dashboard" element={<PrivateRoute allow={['provider']}><ProviderDashboard /></PrivateRoute>} />
+                <Route path="/provider/chats" element={<PrivateRoute allow={['provider']}><ProviderChatQueue /></PrivateRoute>} />
 
-                  {/* ── Fallback ── */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-                <GlobalControls />
-                <NotificationBell />
-              </BrowserRouter>
-            </AuthProvider>
-          </TextSizeProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
+                {/* ── Fallback ── */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+              <GlobalControls />
+              <NotificationBell />
+            </BrowserRouter>
+          </AuthProvider>
+        </TextSizeProvider>
+      </ThemeProvider>
   )
 }
 

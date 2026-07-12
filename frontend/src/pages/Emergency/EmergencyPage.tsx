@@ -16,6 +16,7 @@ interface Contact {
   name: string
   phone_number: string
   relationship: string
+  is_primary: boolean
 }
 
 interface HospitalData {
@@ -296,6 +297,14 @@ export default function EmergencyPage() {
   // Cleanup on unmount
   useEffect(() => () => cancelPress(), [cancelPress])
 
+  // The mother's own primary emergency contact (falls back to the first
+  // saved contact if none is marked primary) — surfaced as a one-tap call
+  // option on the confirmation screen alongside the generic emergency number.
+  const primaryContact = useMemo(
+    () => contacts.find(c => c.is_primary) ?? contacts[0] ?? null,
+    [contacts],
+  )
+
   // ── Quick contacts (police, ambulance, hospital, family) ────────────────
   const quickContacts = useMemo(() => {
     const list: { key: string; label: string; sublabel: string; tel: string; icon: typeof Phone; tone: 'red' | 'blue' | 'pink' }[] = [
@@ -406,6 +415,19 @@ export default function EmergencyPage() {
               <Share2 size={18} /> {t('share_location')}
             </button>
           </div>
+
+          {primaryContact && (
+            <a className="emg-contact-card" href={`tel:${primaryContact.phone_number}`}>
+              <div className="emg-contact-icon"><Heart size={18} /></div>
+              <div className="emg-contact-body">
+                <p className="emg-contact-name">{t('call_primary_contact', { name: primaryContact.name })}</p>
+                <p className="emg-contact-meta">
+                  {primaryContact.relationship} · {primaryContact.phone_number}
+                </p>
+              </div>
+              <Phone size={16} className="emg-contact-arrow" />
+            </a>
+          )}
 
           <h3 className="emg-section-label"><Info size={14} /> {t('immediate_instructions')}</h3>
           <div className="emg-instr-list">

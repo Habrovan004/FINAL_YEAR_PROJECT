@@ -1,7 +1,7 @@
-﻿from django.core.management.base import BaseCommand
+﻿from django.core.management import call_command
+from django.core.management.base import BaseCommand
 
 from patients.models import BabyGrowth
-from tips.models import Tip, TipCategory
 from hospitals.models import Hospital
 from tracking.models import Symptom
 
@@ -14,7 +14,7 @@ class Command(BaseCommand):
         self._seed_symptoms()
         self._seed_hospitals()
         self._seed_baby_growth()
-        self._seed_tips()
+        call_command('seed_tips')
         self.stdout.write(self.style.SUCCESS('All done! Your Mimba Yangu app is now full of content.'))
 
     def _seed_symptoms(self):
@@ -190,45 +190,3 @@ class Command(BaseCommand):
         for g in growth_data:
             BabyGrowth.objects.update_or_create(week=g['week'], defaults=g)
         self.stdout.write('  Baby growth data seeded.')
-
-    def _seed_tips(self):
-        cat_nutrition, _ = TipCategory.objects.get_or_create(
-            name='Nutrition',
-            defaults={'name_sw': 'Lishe', 'icon': '🥗', 'color': '#dcfce7'},
-        )
-        cat_warning, _ = TipCategory.objects.get_or_create(
-            name='Warning Signs',
-            defaults={'name_sw': 'Dalili za Hatari', 'icon': '⚠️', 'color': '#fee2e2'},
-        )
-        tips = [
-            {
-                'category': cat_nutrition,
-                'title': 'Stay Hydrated',
-                'title_sw': 'Kunywa Maji ya Kutosha',
-                'description': 'Drink at least 8-10 glasses of water daily to maintain amniotic fluid levels.',
-                'tip_type': 'nutrition',
-                'trimester': 'all',
-                'is_daily': True,
-            },
-            {
-                'category': cat_warning,
-                'title': 'Severe Headache',
-                'title_sw': 'Maumivu Makali ya Kichwa',
-                'description': 'If you have a headache that won\'t go away, contact your doctor.',
-                'tip_type': 'warning',
-                'trimester': '2',
-                'is_daily': False,
-            },
-            {
-                'category': cat_nutrition,
-                'title': 'Eat Iron-Rich Foods',
-                'title_sw': 'Kula Vyakula vyenye Chuma',
-                'description': 'Focus on spinach, liver, and beans to prevent anemia during your second trimester.',
-                'tip_type': 'nutrition',
-                'trimester': '2',
-                'is_daily': True,
-            },
-        ]
-        for t in tips:
-            Tip.objects.get_or_create(title=t['title'], defaults=t)
-        self.stdout.write('  Tip categories and tips seeded.')

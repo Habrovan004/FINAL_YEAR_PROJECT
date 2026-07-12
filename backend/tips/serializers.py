@@ -1,11 +1,5 @@
 from rest_framework import serializers
-from .models import TipCategory, Tip, Bookmark
-
-
-class TipCategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TipCategory
-        fields = '__all__'
+from .models import Tip, Bookmark
 
 
 class TipSerializer(serializers.ModelSerializer):

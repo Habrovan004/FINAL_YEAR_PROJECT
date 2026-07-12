@@ -25,12 +25,3 @@ class Message(models.Model):
 
     def __str__(self):
         return f"From {self.sender.full_name} at {self.created_at}"
-
-class VideoConsultation(models.Model):
-    room = models.OneToOneField(ChatRoom, on_delete=models.CASCADE, related_name='video_call')
-    meeting_id = models.CharField(max_length=100, unique=True)
-    start_time = models.DateTimeField(auto_now_add=True)
-    is_active = models.BooleanField(default=True)
-
-    def __str__(self):
-        return f"Video: {self.room.patient.full_name}"

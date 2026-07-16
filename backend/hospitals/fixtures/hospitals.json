@@ -1,7 +1,156 @@
 [
-  {"model": "hospitals.hospital", "pk": 1, "fields": {"name": "Muhimbili National Hospital", "type": "public", "services": "Full maternity, NICU", "phone": "+255222150610", "address": "Dar es Salaam", "latitude": -6.8000, "longitude": 39.2833, "is_active": true}},
-  {"model": "hospitals.hospital", "pk": 2, "fields": {"name": "Aga Khan Hospital Dar es Salaam", "type": "private", "services": "Full maternity, NICU", "phone": "+255222860000", "address": "Ocean Road, Dar es Salaam", "latitude": -6.8235, "longitude": 39.2942, "is_active": true}},
-  {"model": "hospitals.hospital", "pk": 3, "fields": {"name": "Temeke Regional Hospital", "type": "public", "services": "Maternity", "phone": "+255222865000", "address": "Temeke, Dar es Salaam", "latitude": -6.8740, "longitude": 39.2887, "is_active": true}},
-  {"model": "hospitals.hospital", "pk": 4, "fields": {"name": "Amana Regional Referral Hospital", "type": "public", "services": "Maternity & Emergency", "phone": "+255222860123", "address": "Ilala, Dar es Salaam", "latitude": -6.8103, "longitude": 39.2530, "is_active": true}},
-  {"model": "hospitals.hospital", "pk": 5, "fields": {"name": "Regency Medical Centre", "type": "private", "services": "Full maternity", "phone": "+255222600000", "address": "Dar es Salaam", "latitude": -6.7924, "longitude": 39.2083, "is_active": true}}
+{
+  "model": "hospitals.hospital",
+  "pk": 1,
+  "fields": {
+    "name": "Muhimbili National Hospital",
+    "type": "public",
+    "services": "Full Maternity, NICU, Emergency",
+    "phone": "+255222151367",
+    "address": "Kalenga St, Dar es Salaam",
+    "latitude": -6.7985,
+    "longitude": 39.2191,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 2,
+  "fields": {
+    "name": "Temeke Regional Hospital",
+    "type": "public",
+    "services": "Maternity Ward, ANC Clinics",
+    "phone": "+255222843301",
+    "address": "Kilwa Rd, Temeke, Dar es Salaam",
+    "latitude": -6.856,
+    "longitude": 39.2403,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 3,
+  "fields": {
+    "name": "Mwananyamala Hospital",
+    "type": "public",
+    "services": "Maternity, Pediatrics, General Care",
+    "phone": "+255222772222",
+    "address": "Bagamoyo Rd, Dar es Salaam",
+    "latitude": -6.7652,
+    "longitude": 39.2345,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 4,
+  "fields": {
+    "name": "Aga Khan Hospital",
+    "type": "private",
+    "services": "Premium Maternity, Specialized Pediatrics",
+    "phone": "+255222115151",
+    "address": "Ocean Road, Dar es Salaam",
+    "latitude": -6.8002,
+    "longitude": 39.2731,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 5,
+  "fields": {
+    "name": "Regency Medical Centre",
+    "type": "private",
+    "services": "Maternity, Advanced Diagnostics",
+    "phone": "+255222150500",
+    "address": "Ali Hassan Mwinyi Rd, Dar es Salaam",
+    "latitude": -6.773,
+    "longitude": 39.258,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 6,
+  "fields": {
+    "name": "CCBRT Hospital",
+    "type": "private",
+    "services": "Maternity, Disability & Rehabilitation",
+    "phone": "+255222622683",
+    "address": "Bagamoyo Rd, Dar es Salaam",
+    "latitude": -6.769,
+    "longitude": 39.239,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 7,
+  "fields": {
+    "name": "Marie Stopes Tanzania",
+    "type": "private",
+    "services": "Reproductive Health, Family Planning",
+    "phone": "+255744550000",
+    "address": "Kinondoni Rd, Dar es Salaam",
+    "latitude": -6.785,
+    "longitude": 39.2,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 8,
+  "fields": {
+    "name": "Ocean Road Cancer Institute",
+    "type": "public",
+    "services": "Oncology (Specialized, not primary maternity)",
+    "phone": "+255222127200",
+    "address": "Ocean Road, Dar es Salaam",
+    "latitude": -6.802,
+    "longitude": 39.288,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 9,
+  "fields": {
+    "name": "St. Francis Hospital",
+    "type": "private",
+    "services": "General Care, Basic Maternity",
+    "phone": "+255754789012",
+    "address": "Mbagala, Dar es Salaam",
+    "latitude": -7.0,
+    "longitude": 39.2,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 10,
+  "fields": {
+    "name": "Sinza Hospital",
+    "type": "public",
+    "services": "General Care, Basic Maternity",
+    "phone": "+255222700000",
+    "address": "Sinza, Dar es Salaam",
+    "latitude": -6.78,
+    "longitude": 39.2,
+    "is_active": true
+  }
+},
+{
+  "model": "hospitals.hospital",
+  "pk": 11,
+  "fields": {
+    "name": "Amana Regional Referral Hospital",
+    "type": "public",
+    "services": "Maternity Ward, ANC Clinics",
+    "phone": "+255 22 284 3301",
+    "address": "Ilala, Dar es Salaam",
+    "latitude": -6.8225,
+    "longitude": 39.2655,
+    "is_active": true
+  }
+}
 ]

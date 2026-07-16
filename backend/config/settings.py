@@ -8,6 +8,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
+# Render injects this automatically with the service's real public hostname,
+# so ALLOWED_HOSTS stays correct even if the service is renamed/recreated and
+# the manually-set ALLOWED_HOSTS env var falls out of sync.
+_render_hostname = config('RENDER_EXTERNAL_HOSTNAME', default='')
+if _render_hostname and _render_hostname not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_hostname)
 
 # Render (and most PaaS) sit behind a reverse proxy that terminates TLS and
 # forwards requests as plain HTTP — without this, Django thinks every

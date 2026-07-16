@@ -9,7 +9,7 @@
 > anywhere the proposal says something different, that's either a proposal update needed
 > or a feature still to build.
 >
-> Last verified against the code: **2026-07-11**, branch `feature/chat-and-appointments`.
+> Last verified against the code: **2026-07-16**, branch `fix/sos-screen-accuracy` (commit `639adae`).
 
 ---
 
@@ -47,8 +47,19 @@ a hospital-manager dashboard, that no longer matches the running app.
 8. **Appointments** — she can request an appointment; it goes in as `requested` and
    needs the provider to confirm, decline, or propose a new time (auto-confirm only
    happens when the *provider* books on her behalf). She can cancel a pending request.
-9. **Emergency (SOS)** — one tap sends her GPS location and alerts her assigned provider
-   and emergency contacts (via SMS).
+9. **Emergency (SOS)** — a 1.5-second long-press sends her GPS location, opens the phone
+   dialer to the national emergency number, and alerts her assigned provider by SMS. The
+   confirmation screen then honestly reflects what actually happened instead of always
+   showing the same success card: **green** if Africa's Talking confirmed the SMS was
+   accepted, **amber "still trying — call directly"** if the alert was logged but the SMS
+   wasn't confirmed sent, or a separate **"could not confirm — call directly"** state if
+   the trigger request itself failed (with an offline queue that retries automatically
+   when connectivity returns). Whichever state she's in, the screen surfaces her saved
+   primary emergency contact and her assigned provider's phone as the most prominent
+   call options — ahead of the generic national numbers (112 ambulance / 999 police,
+   labeled "Backup numbers"), since those aren't reliably tied to dispatch outside Dar es
+   Salaam. Closing the confirmation screen only dismisses it locally — it never cancels
+   the alert or the SMS, and the screen says so explicitly.
 10. **Profile / Settings / Preferences** — dark mode, language (EN/SW), text size
     (Small/Medium/Large), emergency contacts, hospital map.
 
@@ -81,7 +92,7 @@ a hospital-manager dashboard, that no longer matches the running app.
 | Feature | Status | Notes |
 |---|---|---|
 | Registration / login / logout | ✅ Working | Phone-number + password. No OTP step. |
-| Password reset | ✅ Working | Phone number + new password, no OTP/code required — a deliberate simplification, not a bug. |
+| Password reset | ✅ Working | Phone number + new password, no OTP/code required — a deliberate simplification, not a bug. The old OTP scaffolding (`OTPCode` model, `VerifyOTP` screen, unused email/SMS senders) was fully deleted 2026-07-11, not just unused. |
 | JWT session handling | ✅ Working | Access token in memory only; refresh token in an httpOnly cookie; auto-refresh on app load. |
 | Hospital selection / onboarding | ✅ Working | |
 | Mood/symptom tracking | ✅ Working | One entry per day. |
@@ -94,10 +105,10 @@ a hospital-manager dashboard, that no longer matches the running app.
 | Appointment booking (mother) | ✅ Working | Goes in as `requested`, needs provider action. |
 | Appointment booking (provider, on behalf of a patient) | ✅ Working | Auto-confirmed. |
 | Appointment reminders (SMS) | ✅ Working (needs scheduler) | Sent by a management command; must be triggered periodically by cron/Task Scheduler — nothing runs it automatically on its own. |
-| Emergency SOS | ✅ Working | Logs GPS + notifies provider + sends SMS to emergency contacts. |
+| Emergency SOS | ✅ Working | Logs GPS, opens the dialer, and SMS-notifies the assigned provider (not emergency contacts — those are surfaced as tap-to-call options, not auto-texted). The confirmation screen shows the *real* SMS delivery outcome (sent / unsent / request-failed) and prioritizes the mother's saved contact + provider phone over the generic 112/999 numbers. |
 | ANC clinical visit + WHO-aligned risk scoring | ✅ Working | Provider-only; risk level auto-computed, manually overridable. |
 | Prescriptions & medication reminders | ⚠️ **Backend only — no screen for it** | The `Prescription`/`MedicationReminder` models, SMS reminder sending, and adherence-rate stat on the provider dashboard all work, but there is no page for a provider to *create* a prescription or for a mother to *view* one in the UI. This is the single biggest gap if your proposal promises medication management as a visible feature. |
-| Video consultations | ⚠️ **Database table only — nothing built** | A `VideoConsultation` model exists (session tracking) but there is no video-calling functionality anywhere in the frontend. Treat this as "not implemented" unless you plan to build it. |
+| Video consultations | ❌ **Not implemented** | The scaffolded `VideoConsultation` model (and its unused serializer/admin registration) was deleted 2026-07-12 as dead code — there was never a view, URL, or frontend screen behind it. Nothing video-related exists in the codebase now. |
 | Partner (linked support person) role | ❌ Removed | Existed earlier, deliberately removed 2026-07-04. |
 | Hospital Manager role/dashboard | ❌ Removed | Its responsibilities (tip approval, provider/patient oversight) were folded into the Provider role and Django admin. |
 | Bilingual support (EN/SW) | ✅ Working | UI via i18next; AI assistant detects/mirrors language per message; content models store parallel EN/SW fields. |
@@ -148,10 +159,15 @@ status changes.
 **Backend:** Django 4.2 + Django REST Framework, JWT auth (SimpleJWT), PostgreSQL in
 production / SQLite in dev, Google Gemini (`gemini-2.5-flash`) for the AI assistant,
 Africa's Talking for SMS, Gmail SMTP for email.
-**Frontend:** React 19 + TypeScript + Vite, Tailwind CSS, TanStack Query, Axios, Leaflet
-(maps), Recharts (charts), i18next (EN/SW).
-**Deployment:** frontend on Vercel (static build), backend on Render (`gunicorn` +
-managed Postgres, `render.yaml`).
+**Frontend:** React 19 + TypeScript + Vite, Tailwind CSS, Axios (no TanStack Query — it
+was added early on, never actually used, and removed 2026-07-12), Leaflet (maps),
+Recharts (charts), i18next (EN/SW).
+**Deployment:** frontend on Vercel (static build), backend on Render free tier
+(`gunicorn` + managed Postgres, `render.yaml`). The frontend API client retries once on
+a network-level failure to ride out Render's free-tier cold start (the instance spins
+down after inactivity), and `ALLOWED_HOSTS` picks up Render's injected
+`RENDER_EXTERNAL_HOSTNAME` automatically so it can't drift out of sync with the deployed
+service.
 
 *(Full dependency versions are unchanged from the original stack table if you need them
 for the dissertation — ask and this section can be expanded back out.)*
@@ -163,21 +179,31 @@ for the dissertation — ask and this section can be expanded back out.)*
 If your proposal document predates recent changes, watch for these specific mismatches:
 
 - **"OTP verification during registration/password reset"** — removed. Registration and
-  password reset are now direct, no SMS/email code step. (`OTPCode` model still exists
-  in the database schema but nothing currently calls it — it's dead code, not an active
-  feature.)
+  password reset are now direct, no SMS/email code step. The `OTPCode` model, the
+  `VerifyOTP` screen, and the unused OTP-sending helpers are gone from the codebase
+  entirely (deleted 2026-07-11), not just unused.
 - **"Partner role"** — removed entirely, including the invitation-code linking flow and
   the Partner Support page.
 - **"Hospital Manager role / dashboard"** — removed entirely. Tip approval and
   provider/hospital oversight now happen via the Provider role and Django admin instead
   of a dedicated manager UI.
-- **"Video consultation"** — if the proposal promises this as a working feature, it
-  isn't — only a placeholder database table exists.
+- **"Admin role / audit-log & backup dashboard"** — the `admin` user type was dropped
+  long ago, which silently made the entire `maintenance` app (audit log viewer, backup
+  trigger, account recovery) unreachable by any account. That dead code was deleted
+  2026-07-12; `AuditLog` itself is still written by scheduled tasks and appointment
+  actions, just with no dedicated viewer UI.
+- **"Video consultation"** — not implemented. Even the placeholder `VideoConsultation`
+  database table was removed as dead code (2026-07-12) — treat this as nonexistent, not
+  "partially built."
 - **"Medication reminders"** — if the proposal implies mothers/providers can manage
   prescriptions *in the app*, that part isn't built; only the SMS-sending backend is.
+- **"SOS alerts the mother's emergency contacts automatically"** — it doesn't; the SMS
+  goes to the assigned provider only. Emergency contacts are shown as prominent tap-to-call
+  buttons on the confirmation screen, not auto-notified.
 
 ---
 
-*This document reflects the codebase as of 2026-07-11 (commit `3250889`). Update it
-whenever a feature is added, removed, or changed — don't let it go stale like the
+*This document reflects the codebase as of 2026-07-16 (commit `639adae`, plus
+uncommitted deployment-robustness fixes on `fix/sos-screen-accuracy` — see §8). Update
+it whenever a feature is added, removed, or changed — don't let it go stale like the
 version it replaced.*

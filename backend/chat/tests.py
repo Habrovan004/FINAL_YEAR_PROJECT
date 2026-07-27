@@ -36,10 +36,10 @@ class ChatTestBase(APITestCase):
         self.hospital = Hospital.objects.create(name='Test Hospital')
 
         self.mother = User.objects.create_user(
-            phone_number='+255700000101', full_name='Asha Juma', password='pass123', user_type='patient',
+            phone_number='+255700000101', full_name='Asha Juma', user_type='patient',
         )
         self.provider_user = User.objects.create_user(
-            phone_number='+255700000102', full_name='Dr Kessy', password='pass123', user_type='provider',
+            phone_number='+255700000102', full_name='Dr Kessy', user_type='provider',
         )
         self.provider_profile = ProviderProfile.objects.create(
             user=self.provider_user, hospital=self.hospital, specialization='midwife',
@@ -50,10 +50,10 @@ class ChatTestBase(APITestCase):
 
         # An unrelated mother/provider pair, for cross-account 404 tests.
         self.other_mother = User.objects.create_user(
-            phone_number='+255700000201', full_name='Neema Paul', password='pass123', user_type='patient',
+            phone_number='+255700000201', full_name='Neema Paul', user_type='patient',
         )
         self.other_provider_user = User.objects.create_user(
-            phone_number='+255700000202', full_name='Dr Mrema', password='pass123', user_type='provider',
+            phone_number='+255700000202', full_name='Dr Mrema', user_type='provider',
         )
         self.other_provider_profile = ProviderProfile.objects.create(
             user=self.other_provider_user, hospital=self.hospital, specialization='nurse',
@@ -89,7 +89,7 @@ class LazyRoomCreationTests(ChatTestBase):
 
     def test_mother_without_assigned_provider_gets_400(self):
         unassigned = User.objects.create_user(
-            phone_number='+255700000301', full_name='No Provider Yet', password='pass123', user_type='patient',
+            phone_number='+255700000301', full_name='No Provider Yet', user_type='patient',
         )
         PatientProfile.objects.create(user=unassigned, assigned_provider=None)
         self.login_as(unassigned)

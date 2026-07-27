@@ -39,6 +39,19 @@ Starting development server at http://127.0.0.1:8000/
 Quit the server with CONTROL-C.
 ```
 
+### Dev tooling: secret scanning (do this once, before your first commit)
+
+This repo runs [ggshield](https://github.com/GitGuardian/ggshield) as a pre-commit
+hook to catch accidental secrets before they reach GitHub:
+
+```bash
+pip install ggshield
+ggshield install -m local
+```
+
+`ggshield` is dev-only tooling — it is not a runtime dependency and is not
+listed in `requirements.txt`.
+
 ---
 
 ## Step 2: Frontend Setup

@@ -13,11 +13,19 @@ Fallback: when ``GEMINI_API_KEY`` is missing or the API errors, the engine
 returns a friendly "service unavailable" message (no keyword bot, no fake
 answers). All actual SDK plumbing lives in ``services.gemini_service`` so
 this module focuses purely on chat-domain logic.
+
+Two safety rules are enforced in code (not just via the prompt) on every
+reply this module returns, regardless of which branch produced it — see
+``_finalize()``: drug dosages are stripped and replaced with a safe
+redirect, and an escalation reply always mentions that a nurse has been
+notified and the SOS option, even when the keyword safety net (not Gemini)
+is what triggered the escalation.
 """
 from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Iterable, Optional
 
 from django.conf import settings
@@ -207,6 +215,73 @@ def _apply_keyword_safety_net(result: dict, keyword_hit: Optional[str]) -> dict:
     return result
 
 
+# ── Code-level dosage filter ────────────────────────────────────────────────
+# The system prompt already tells Gemini never to prescribe doses, but that's
+# a request, not a guarantee. English units are numeral-first ("500mg", "2
+# tablets"); Swahili idiomatically puts the noun before the numeral ("vidonge
+# 2", "kidonge kimoja"), so both orders are matched. Deliberately broad: a
+# false positive (redirecting a borderline reply to the provider) is the
+# acceptable failure mode here, a missed dosage is not.
+_DOSAGE_UNITS_EN = r'mg|ml|mcg|g|iu|tablets?|capsules?|drops?'
+_DOSAGE_WORDS_SW = r'vidonge|kidonge|vipimo|matone'
+_DOSAGE_PATTERN = re.compile(
+    rf'\b(\d+(\.\d+)?\s*({_DOSAGE_UNITS_EN})|({_DOSAGE_WORDS_SW})\s*\d+)\b',
+    re.IGNORECASE,
+)
+
+_DOSAGE_REDIRECT_EN = (
+    "For medication amounts, please check with your provider directly — "
+    "I'm not able to give specific doses. I can flag this for them if you'd like."
+)
+_DOSAGE_REDIRECT_SW = (
+    "Kwa kiwango cha dawa, tafadhali wasiliana moja kwa moja na mhudumu wako wa afya — "
+    "sijaruhusiwa kutoa kipimo maalum. Ninaweza kumjulisha kama ungependa."
+)
+
+
+def sanitize_reply(reply_text: str, language_hint: str = "en") -> str:
+    """Replace any reply containing a drug-dosage pattern with a safe redirect."""
+    if _DOSAGE_PATTERN.search(reply_text or ""):
+        is_sw = (language_hint or "").lower().startswith("sw")
+        return _DOSAGE_REDIRECT_SW if is_sw else _DOSAGE_REDIRECT_EN
+    return reply_text
+
+
+# ── Escalation notice guarantee ─────────────────────────────────────────────
+# When escalate=True, the mother must be told a nurse/provider has been
+# notified and that the SOS option exists — in code, not only via the prompt,
+# so this holds even when the keyword safety net (not Gemini itself) is what
+# triggered escalation and Gemini's own reply text never mentioned either.
+_ESCALATION_NOTICE_EN = (
+    " A nurse has been notified and will follow up with you soon. "
+    "If you feel this is an emergency right now, please use the SOS button in the app."
+)
+_ESCALATION_NOTICE_SW = (
+    " Muuguzi ameshaarifiwa na atawasiliana nawe hivi karibuni. "
+    "Kama unahisi hii ni dharura sasa hivi, tafadhali tumia kitufe cha SOS kwenye programu."
+)
+_NOTICE_ALREADY_PRESENT_MARKERS = ("sos", "nurse", "muuguzi", "mhudumu")
+
+
+def _ensure_escalation_notice(reply_text: str, language_hint: str) -> str:
+    lowered = (reply_text or "").lower()
+    if any(marker in lowered for marker in _NOTICE_ALREADY_PRESENT_MARKERS):
+        return reply_text
+    is_sw = (language_hint or "").lower().startswith("sw")
+    notice = _ESCALATION_NOTICE_SW if is_sw else _ESCALATION_NOTICE_EN
+    return (reply_text or "").rstrip() + notice
+
+
+def _finalize(result: dict, language_hint: str) -> dict:
+    """Cross-cutting safety rules applied to every reply, regardless of which
+    branch (Gemini success, fallback, or keyword-forced) produced it."""
+    reply = sanitize_reply(result.get("bot_reply") or "", language_hint)
+    if result.get("escalate"):
+        reply = _ensure_escalation_notice(reply, language_hint)
+    result["bot_reply"] = reply
+    return result
+
+
 def _parse_structured_reply(raw_text: str) -> Optional[dict]:
     """Decode the JSON object Gemini returns. Returns None on bad payloads."""
     if not raw_text:
@@ -260,9 +335,10 @@ def process_message(
     keyword_hit = _keyword_escalation(text)
 
     if not gemini_service.is_available():
-        return _apply_keyword_safety_net(
+        result = _apply_keyword_safety_net(
             _fallback(language_hint, reason="ai_unavailable"), keyword_hit
         )
+        return _finalize(result, language_hint)
 
     history_list = list(history or [])
     history_limit = getattr(settings, "AI_CHAT_HISTORY_LIMIT", 20)
@@ -292,16 +368,18 @@ def process_message(
 
     if not raw_text:
         # gemini_service already logged the underlying error.
-        return _apply_keyword_safety_net(
+        result = _apply_keyword_safety_net(
             _fallback(language_hint, reason="ai_api_error"), keyword_hit
         )
+        return _finalize(result, language_hint)
 
     data = _parse_structured_reply(raw_text)
     if not data or not (data.get("reply") or "").strip():
         logger.warning("Gemini returned non-JSON or empty reply: %r", raw_text[:200])
-        return _apply_keyword_safety_net(
+        result = _apply_keyword_safety_net(
             _fallback(language_hint, reason="ai_bad_payload"), keyword_hit
         )
+        return _finalize(result, language_hint)
 
     reply_text = data["reply"].strip()
     escalate = bool(data.get("escalate", False))
@@ -314,9 +392,10 @@ def process_message(
         escalate, reason, reply_text[:120],
     )
 
-    return _apply_keyword_safety_net({
+    result = _apply_keyword_safety_net({
         "escalate": escalate,
         "reason": reason,
         "bot_reply": reply_text,
         "ai_available": True,
     }, keyword_hit)
+    return _finalize(result, language_hint)

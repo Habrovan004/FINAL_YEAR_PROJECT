@@ -8,7 +8,7 @@ from tracking.models import SymptomReport
 class SkipOnboardingTests(APITestCase):
 	def setUp(self):
 		self.phone = '0712345679'
-		self.user = User.objects.create_user(phone_number=self.phone, full_name='Patient One', password='pass123')
+		self.user = User.objects.create_user(phone_number=self.phone, full_name='Patient One')
 		# ensure profile exists
 		PatientProfile._default_manager.get_or_create(user=self.user)
 		tokens = RefreshToken.for_user(self.user)

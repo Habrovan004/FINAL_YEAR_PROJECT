@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, X, AlertCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Loader2, X, AlertCircle, Search, Lock } from 'lucide-react'
 import api from '../../api/client'
 
 export interface PatientRow {
@@ -33,6 +34,7 @@ interface ANCForm {
   next_appointment_date: string
   risk_level: string
   risk_level_override: boolean
+  risk_level_override_reason: string
 }
 
 const EMPTY_ANC: ANCForm = {
@@ -46,6 +48,7 @@ const EMPTY_ANC: ANCForm = {
   complications: 'none', symptoms: '', visit_notes: '',
   next_appointment_date: '',
   risk_level: 'auto', risk_level_override: false,
+  risk_level_override_reason: '',
 }
 
 export interface ANCSaveResponse {
@@ -59,6 +62,7 @@ export interface ANCSaveResponse {
 interface ANCVisitModalProps {
   open: boolean
   patients: PatientRow[]
+  preselectedPatientId?: number
   onClose: () => void
   onSaved: (response: ANCSaveResponse) => void
 }
@@ -71,6 +75,49 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'clinical', label: 'Clinical' },
   { key: 'summary', label: 'Summary' },
 ]
+
+// ── Local draft persistence (per mother) ────────────────────────────────────
+const DRAFT_PREFIX = 'mimba_anc_draft_'
+const DRAFT_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000 // 3 days
+
+interface StoredDraft {
+  form: ANCForm
+  savedAt: number
+}
+
+const draftKey = (patientId: number | string) => `${DRAFT_PREFIX}${patientId}`
+
+function readDraft(patientId: number): StoredDraft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(patientId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.form || typeof parsed.savedAt !== 'number') return null
+    if (Date.now() - parsed.savedAt > DRAFT_MAX_AGE_MS) {
+      localStorage.removeItem(draftKey(patientId))
+      return null
+    }
+    return parsed as StoredDraft
+  } catch {
+    return null
+  }
+}
+
+function writeDraft(patientId: number | string, form: ANCForm) {
+  try {
+    localStorage.setItem(draftKey(patientId), JSON.stringify({ form, savedAt: Date.now() }))
+  } catch {
+    // best-effort only — storage may be full or unavailable
+  }
+}
+
+function clearDraft(patientId: number | string) {
+  try {
+    localStorage.removeItem(draftKey(patientId))
+  } catch {
+    // ignore
+  }
+}
 
 function extractApiError(e: any, fallback: string): string {
   if (e?.request && !e?.response) {
@@ -93,27 +140,136 @@ function extractApiError(e: any, fallback: string): string {
   return fallback
 }
 
-export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCVisitModalProps) {
+const patientLabel = (p: PatientRow) => `${p.full_name} · ${p.phone_number}`
+
+export default function ANCVisitModal({ open, patients, preselectedPatientId, onClose, onSaved }: ANCVisitModalProps) {
+  const { t } = useTranslation()
   const [form, setForm] = useState<ANCForm>(EMPTY_ANC)
   const [saving, setSaving] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const [serverError, setServerError] = useState('')
   const [activeSection, setActiveSection] = useState<SectionKey>('vitals')
 
+  // Typeahead patient picker
+  const [selectedPatient, setSelectedPatient] = useState<PatientRow | null>(null)
+  const [patientQuery, setPatientQuery] = useState('')
+  const [patientDropdownOpen, setPatientDropdownOpen] = useState(false)
+  const [patientResults, setPatientResults] = useState<PatientRow[]>([])
+  const [searchingPatients, setSearchingPatients] = useState(false)
+  const patientFieldRef = useRef<HTMLDivElement | null>(null)
+
+  // Draft resume prompt
+  const [pendingDraft, setPendingDraft] = useState<StoredDraft | null>(null)
+
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const sectionRefs = useRef<Record<SectionKey, HTMLDivElement | null>>({
     vitals: null, tests: null, clinical: null, summary: null,
   })
 
-  // Reset when reopened
-  useEffect(() => {
-    if (open) {
-      setForm(EMPTY_ANC)
-      setSubmitAttempted(false)
-      setServerError('')
-      setActiveSection('vitals')
+  const isLocked = preselectedPatientId != null && Boolean(selectedPatient)
+
+  const applyServerPrefill = async (patient: PatientRow) => {
+    setField('gestational_age_weeks', patient.gestational_age_weeks != null ? String(patient.gestational_age_weeks) : '')
+    try {
+      const res = await api.get(`/clinical/summary/${patient.id}/`)
+      const last = res.data?.last_visit
+      if (last) {
+        setForm(prev => ({
+          ...prev,
+          blood_group: last.blood_group ?? prev.blood_group,
+          hiv_status: last.hiv_status ?? prev.hiv_status,
+          syphilis_status: last.syphilis_status ?? prev.syphilis_status,
+        }))
+      }
+    } catch {
+      // Non-fatal — provider can still fill these in manually
     }
-  }, [open])
+  }
+
+  const choosePatient = (patient: PatientRow) => {
+    setSelectedPatient(patient)
+    setField('patient_id', String(patient.id))
+    setPatientQuery(patientLabel(patient))
+    setPatientDropdownOpen(false)
+    const draft = readDraft(patient.id)
+    if (draft) {
+      setPendingDraft(draft)
+    } else {
+      setPendingDraft(null)
+      void applyServerPrefill(patient)
+    }
+  }
+
+  // Reset / initialize when the modal opens
+  useEffect(() => {
+    if (!open) return
+    setForm(EMPTY_ANC)
+    setSubmitAttempted(false)
+    setServerError('')
+    setActiveSection('vitals')
+    setPatientDropdownOpen(false)
+    setPatientResults([])
+    setPendingDraft(null)
+
+    if (preselectedPatientId != null) {
+      const p = patients.find(pp => pp.id === preselectedPatientId) ?? null
+      setSelectedPatient(p)
+      setPatientQuery(p ? patientLabel(p) : '')
+      if (p) {
+        setField('patient_id', String(p.id))
+        const draft = readDraft(p.id)
+        if (draft) {
+          setPendingDraft(draft)
+        } else {
+          void applyServerPrefill(p)
+        }
+      }
+    } else {
+      setSelectedPatient(null)
+      setPatientQuery('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preselectedPatientId])
+
+  // Typeahead search (debounced) — skip while the query still matches the selection
+  useEffect(() => {
+    if (!open || !patientDropdownOpen) return
+    if (selectedPatient && patientQuery === patientLabel(selectedPatient)) return
+    const q = patientQuery.trim()
+    if (!q) {
+      setPatientResults(patients)
+      setSearchingPatients(false)
+      return
+    }
+    setSearchingPatients(true)
+    const id = window.setTimeout(() => {
+      api.get<PatientRow[]>('/patients/', { params: { search: q } })
+        .then(res => setPatientResults(res.data))
+        .catch(() => setPatientResults([]))
+        .finally(() => setSearchingPatients(false))
+    }, 300)
+    return () => window.clearTimeout(id)
+  }, [patientQuery, patientDropdownOpen, open, patients, selectedPatient])
+
+  // Close the dropdown on outside click
+  useEffect(() => {
+    if (!patientDropdownOpen) return
+    const handler = (e: MouseEvent) => {
+      if (patientFieldRef.current && !patientFieldRef.current.contains(e.target as Node)) {
+        setPatientDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [patientDropdownOpen])
+
+  // Persist in-progress form state locally, per mother, so an accidental close
+  // or network failure doesn't lose the provider's work.
+  useEffect(() => {
+    if (!open || !form.patient_id || pendingDraft) return
+    const id = window.setTimeout(() => writeDraft(form.patient_id, form), 400)
+    return () => window.clearTimeout(id)
+  }, [form, open, pendingDraft])
 
   // Track active section via scroll position
   useEffect(() => {
@@ -147,11 +303,26 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
     if (!form.gestational_age_weeks) e.gestational_age_weeks = 'Gestational age is required'
     if (!form.blood_pressure_systolic) e.blood_pressure_systolic = 'BP systolic is required'
     if (!form.blood_pressure_diastolic) e.blood_pressure_diastolic = 'BP diastolic is required'
+    if (form.risk_level !== 'auto' && !form.risk_level_override_reason.trim()) {
+      e.risk_level_override_reason = t('provider_anc_override_reason_required')
+    }
     return e
-  }, [form])
+  }, [form, t])
 
   const setField = <K extends keyof ANCForm>(key: K, value: ANCForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }))
+  }
+
+  const resumeDraft = () => {
+    if (!pendingDraft) return
+    setForm(pendingDraft.form)
+    setPendingDraft(null)
+  }
+
+  const discardDraft = () => {
+    if (selectedPatient) clearDraft(selectedPatient.id)
+    setPendingDraft(null)
+    if (selectedPatient) void applyServerPrefill(selectedPatient)
   }
 
   const scrollToSection = (key: SectionKey) => {
@@ -164,11 +335,12 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
   const submit = async () => {
     setSubmitAttempted(true)
     if (Object.keys(errors).length > 0) {
-      setServerError('Please fill in the required Vitals fields (patient, weight, blood pressure, gestational age) before saving.')
-      // Scroll to first error
+      setServerError('Please fill in the required fields before saving.')
       if (errors.patient_id || errors.weight_kg || errors.gestational_age_weeks
         || errors.blood_pressure_systolic || errors.blood_pressure_diastolic) {
         scrollToSection('vitals')
+      } else if (errors.risk_level_override_reason) {
+        scrollToSection('summary')
       }
       return
     }
@@ -203,8 +375,10 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
       if (form.risk_level !== 'auto') {
         payload.risk_level = form.risk_level
         payload.risk_level_override = true
+        payload.risk_level_override_reason = form.risk_level_override_reason
       }
       const res = await api.post<ANCSaveResponse>('/clinical/visits/', payload)
+      clearDraft(form.patient_id)
       onSaved(res.data)
     } catch (e: any) {
       setServerError(extractApiError(e, 'Could not save the visit.'))
@@ -258,33 +432,88 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
             </div>
           )}
 
+          {pendingDraft && (
+            <div className="anc-draft-banner" role="alert">
+              <div>
+                <p className="anc-draft-banner-title">{t('provider_anc_resume_draft_title')}</p>
+                <p className="anc-draft-banner-body">{t('provider_anc_resume_draft_body')}</p>
+              </div>
+              <div className="anc-draft-banner-actions">
+                <button type="button" onClick={discardDraft} className="anc-draft-discard">
+                  {t('provider_anc_discard_draft')}
+                </button>
+                <button type="button" onClick={resumeDraft} className="anc-draft-resume">
+                  {t('provider_anc_resume')}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* PATIENT */}
-          <div className="anc-field-row">
+          <div className="anc-field-row" ref={patientFieldRef}>
             <label htmlFor="anc-patient" className="anc-label">Patient<span className="req">*</span></label>
-            {patients.length === 0 ? (
+            {patients.length === 0 && !isLocked ? (
               <p className="anc-hint">
                 No patients assigned to you yet. Patients are auto-assigned when
                 they finish onboarding at your hospital.
               </p>
+            ) : isLocked && selectedPatient ? (
+              <div className="anc-locked-patient">
+                <Lock size={13} />
+                <span>{patientLabel(selectedPatient)} · wk {selectedPatient.gestational_age_weeks} · {selectedPatient.risk_level.toUpperCase()}</span>
+              </div>
             ) : (
-              <>
-                <select
-                  id="anc-patient"
-                  className={inputClass('patient_id')}
-                  value={form.patient_id}
-                  onChange={e => setField('patient_id', e.target.value)}
-                >
-                  <option value="">— Select patient —</option>
-                  {patients.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.full_name} · wk {p.gestational_age_weeks} · {p.risk_level.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
+              <div className="anc-typeahead">
+                <div className="anc-typeahead-input-wrap">
+                  <Search size={14} className="anc-typeahead-icon" />
+                  <input
+                    id="anc-patient"
+                    type="text"
+                    autoComplete="off"
+                    className={inputClass('patient_id')}
+                    style={{ paddingLeft: 32 }}
+                    placeholder={t('provider_anc_search_patient') ?? undefined}
+                    value={patientQuery}
+                    onFocus={() => { setPatientDropdownOpen(true); if (!patientQuery.trim()) setPatientResults(patients) }}
+                    onChange={e => {
+                      setPatientQuery(e.target.value)
+                      setPatientDropdownOpen(true)
+                      if (selectedPatient && e.target.value !== patientLabel(selectedPatient)) {
+                        setSelectedPatient(null)
+                        setField('patient_id', '')
+                      }
+                    }}
+                  />
+                </div>
+                {patientDropdownOpen && (
+                  <div className="anc-typeahead-dropdown">
+                    {searchingPatients ? (
+                      <div className="anc-typeahead-empty">
+                        <Loader2 className="anc-spin" size={14} /> {t('provider_anc_searching')}
+                      </div>
+                    ) : patientResults.length === 0 ? (
+                      <div className="anc-typeahead-empty">{t('provider_anc_no_results')}</div>
+                    ) : (
+                      patientResults.map(p => (
+                        <button
+                          type="button"
+                          key={p.id}
+                          className="anc-typeahead-option"
+                          onClick={() => choosePatient(p)}
+                        >
+                          <span className="anc-typeahead-option-name">{p.full_name}</span>
+                          <span className="anc-typeahead-option-meta">
+                            {p.phone_number} · wk {p.gestational_age_weeks} · {p.risk_level.toUpperCase()}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
                 {showErr('patient_id') && (
                   <p className="anc-error-text">{errors.patient_id}</p>
                 )}
-              </>
+              </div>
             )}
           </div>
 
@@ -561,13 +790,38 @@ export default function ANCVisitModal({ open, patients, onClose, onSaved }: ANCV
               </select>
             </div>
 
+            {form.risk_level !== 'auto' && (
+              <div className="anc-field-row">
+                <label htmlFor="anc-override-reason" className="anc-label">
+                  {t('provider_anc_override_reason_label')}<span className="req">*</span>
+                </label>
+                <textarea
+                  id="anc-override-reason"
+                  className={inputClass('risk_level_override_reason')}
+                  rows={2}
+                  placeholder={t('provider_anc_override_reason_placeholder') ?? undefined}
+                  value={form.risk_level_override_reason}
+                  onChange={e => setField('risk_level_override_reason', e.target.value)}
+                />
+                {showErr('risk_level_override_reason') && (
+                  <p className="anc-error-text">{errors.risk_level_override_reason}</p>
+                )}
+              </div>
+            )}
+
             <button
               type="button"
               className="anc-save-btn"
-              disabled={saving || patients.length === 0}
+              disabled={saving || (patients.length === 0 && !isLocked)}
               onClick={submit}
             >
-              {saving ? <Loader2 className="anc-spin" size={16} /> : 'Save visit'}
+              {saving ? (
+                <Loader2 className="anc-spin" size={16} />
+              ) : submitAttempted && serverError ? (
+                t('provider_anc_retry_save')
+              ) : (
+                'Save visit'
+              )}
             </button>
           </div>
         </div>

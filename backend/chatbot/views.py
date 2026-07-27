@@ -30,19 +30,25 @@ from rest_framework.response import Response
 
 from .models import Conversation, Message
 from .ai_engine import process_message, is_ai_available, get_active_model
+from .escalation import notify_provider_of_escalation
+from clinical.models import ANCVisit
 
 logger = logging.getLogger(__name__)
 
 
 def _serialize_message(m: Message) -> dict:
     sender_name = "Health Assistant"
-    if m.sender_type in ('mother', 'provider') and m.sender:
+    if m.sender_type == 'system':
+        sender_name = "System"
+    elif m.sender_type in ('mother', 'provider') and m.sender:
         sender_name = m.sender.full_name
     return {
         'id': m.id,
         'sender_type': m.sender_type,
         'sender_name': sender_name,
         'content': m.content,
+        'message_type': m.message_type,
+        'metadata': m.metadata,
         'triggered_escalation': m.triggered_escalation,
         'created_at': m.created_at.isoformat(),
     }
@@ -279,6 +285,7 @@ def post_message(request):
             "Escalation | convo=%s mother=%s reason=%s",
             convo.id, request.user.id, result.get('reason'),
         )
+        notify_provider_of_escalation(convo, request.user)
 
         return Response({
             'message': _serialize_message(mother_msg),
@@ -287,6 +294,7 @@ def post_message(request):
             'escalated': True,
             'escalation_reason': result['reason'],
             'ai_available': ai_available,
+            'sos_route': '/emergency',
         }, status=201)
 
     bot_reply = Message.objects.create(
@@ -309,14 +317,18 @@ def post_message(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def conversation_messages(request, conversation_id):
-    """Fetch all messages in a conversation. Access restricted to the mother or assigned provider."""
+    """Fetch all messages in a conversation. Access restricted to the mother
+    or assigned provider — scoped in the query itself and 404 (not 403) on
+    a mismatch, so an authenticated user can't confirm a foreign
+    conversation ID exists.
+    """
     try:
-        convo = Conversation.objects.get(pk=conversation_id)
+        if request.user.user_type == 'provider':
+            convo = Conversation.objects.get(pk=conversation_id, provider=request.user)
+        else:
+            convo = Conversation.objects.get(pk=conversation_id, mother=request.user)
     except Conversation.DoesNotExist:
         return Response({'error': 'Not found.'}, status=404)
-
-    if request.user != convo.mother and request.user != convo.provider:
-        return Response({'error': 'Forbidden.'}, status=403)
 
     return Response(_serialize_conversation(convo, include_messages=True))
 
@@ -371,6 +383,55 @@ def provider_reply(request):
     return Response({'message': _serialize_message(msg)}, status=201)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def provider_insert_visit_summary(request):
+    """Provider inserts one of the mother's past ANC visits into the chat as
+    a structured summary card, instead of retyping her vitals/history.
+    """
+    if request.user.user_type != 'provider':
+        return Response({'error': 'Only providers can do this.'}, status=403)
+
+    convo_id = request.data.get('conversation_id')
+    visit_id = request.data.get('visit_id')
+    if not convo_id or not visit_id:
+        return Response({'error': 'conversation_id and visit_id are required.'}, status=400)
+
+    try:
+        convo = Conversation.objects.get(pk=convo_id, provider=request.user, is_active=True)
+    except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation not found.'}, status=404)
+
+    try:
+        visit = ANCVisit.objects.get(pk=visit_id, patient=convo.mother)
+    except ANCVisit.DoesNotExist:
+        return Response({'error': 'Visit not found.'}, status=404)
+
+    summary = {
+        'visit_id': visit.id,
+        'visit_date': visit.visit_date.isoformat(),
+        'gestational_age_weeks': visit.gestational_age_weeks,
+        'blood_pressure_systolic': visit.blood_pressure_systolic,
+        'blood_pressure_diastolic': visit.blood_pressure_diastolic,
+        'weight_kg': visit.weight_kg,
+        'hemoglobin_g_dl': visit.hemoglobin_g_dl,
+        'risk_level': visit.risk_level,
+        'complications': visit.get_complications_display(),
+        'next_appointment_date': visit.next_appointment_date.isoformat() if visit.next_appointment_date else None,
+    }
+    msg = Message.objects.create(
+        conversation=convo,
+        sender=request.user,
+        sender_type='provider',
+        message_type='visit_summary',
+        content=f"ANC visit summary — {visit.visit_date.date().isoformat()}",
+        metadata=summary,
+    )
+    convo.save(update_fields=['updated_at'])
+
+    return Response(_serialize_message(msg), status=201)
+
+
 # ── Legacy endpoint kept so the old mother-facing chat UI does not 500 ──
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -407,6 +468,7 @@ def bot_chat(request):
         convo.type = 'provider'
         convo.escalated_at = timezone.now()
         convo.save(update_fields=['type', 'escalated_at'])
+        notify_provider_of_escalation(convo, request.user)
     Message.objects.create(
         conversation=convo, sender=None, sender_type='chatbot',
         content=result['bot_reply'], triggered_escalation=result['escalate'],
@@ -415,6 +477,7 @@ def bot_chat(request):
         'bot_message': result['bot_reply'],
         'risk_level': 'high' if result['escalate'] else 'low',
         'state': 'escalated' if result['escalate'] else 'initial',
+        'sos_route': '/emergency' if result['escalate'] else None,
     })
 
 

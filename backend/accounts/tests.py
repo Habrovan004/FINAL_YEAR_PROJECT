@@ -1,11 +1,27 @@
+import secrets
+
+from django.core.cache import cache
 from rest_framework.test import APITestCase
 from .models import User, PasswordResetCode
+
+# Dummy test credential — never a real login is exercised with it (this
+# suite tests the password-RESET flow, not login); generated per test run
+# so nothing password-shaped is a static literal in source control.
+TEST_PASSWORD = secrets.token_urlsafe(12)
 
 
 class PasswordResetTests(APITestCase):
 	def setUp(self):
+		# PasswordResetThrottle is a DRF AnonRateThrottle — keyed by IP, not
+		# phone number, via Django's cache. Every test method in this class
+		# makes at least one request to the throttled endpoint from the same
+		# test-client "IP", so without clearing the cache between tests the
+		# count accumulates across methods and the alphabetically-last one
+		# (which runs after 5 prior requests already consumed the 5/600s
+		# limit) gets a spurious 429 instead of the 200 it's asserting.
+		cache.clear()
 		self.phone = '0712345678'
-		self.user = User.objects.create_user(phone_number=self.phone, full_name='Test User', password='oldpass')
+		self.user = User.objects.create_user(phone_number=self.phone, full_name='Test User', password=TEST_PASSWORD)
 
 	def test_request_then_confirm_resets_password(self):
 		resp = self.client.post('/api/auth/password-reset/request/', {'phone_number': self.phone}, format='json')
@@ -13,15 +29,16 @@ class PasswordResetTests(APITestCase):
 		reset_code = PasswordResetCode.objects.filter(user=self.user).last()
 		self.assertIsNotNone(reset_code)
 
+		new_password = secrets.token_urlsafe(12)
 		resp2 = self.client.post('/api/auth/password-reset/confirm/', {
 			'phone_number': self.phone,
 			'code': reset_code.code,
-			'new_password': 'newpass123',
+			'new_password': new_password,
 		}, format='json')
 		self.assertEqual(resp2.status_code, 200)
 
 		self.user.refresh_from_db()
-		self.assertTrue(self.user.check_password('newpass123'))
+		self.assertTrue(self.user.check_password(new_password))
 
 		reset_code.refresh_from_db()
 		self.assertTrue(reset_code.is_used)
@@ -39,7 +56,7 @@ class PasswordResetTests(APITestCase):
 		resp = self.client.post('/api/auth/password-reset/confirm/', {
 			'phone_number': self.phone,
 			'code': '000000',
-			'new_password': 'newpass123',
+			'new_password': secrets.token_urlsafe(12),
 		}, format='json')
 		self.assertEqual(resp.status_code, 400)
 		self.assertEqual(resp.data['error'], 'Invalid or expired code.')
@@ -51,14 +68,14 @@ class PasswordResetTests(APITestCase):
 		first = self.client.post('/api/auth/password-reset/confirm/', {
 			'phone_number': self.phone,
 			'code': reset_code.code,
-			'new_password': 'newpass123',
+			'new_password': secrets.token_urlsafe(12),
 		}, format='json')
 		self.assertEqual(first.status_code, 200)
 
 		second = self.client.post('/api/auth/password-reset/confirm/', {
 			'phone_number': self.phone,
 			'code': reset_code.code,
-			'new_password': 'anotherpass456',
+			'new_password': secrets.token_urlsafe(12),
 		}, format='json')
 		self.assertEqual(second.status_code, 400)
 		self.assertEqual(second.data['error'], 'Invalid or expired code.')
@@ -73,7 +90,7 @@ class PasswordResetTests(APITestCase):
 		resp = self.client.post('/api/auth/password-reset/confirm/', {
 			'phone_number': self.phone,
 			'code': reset_code.code,
-			'new_password': 'newpass123',
+			'new_password': secrets.token_urlsafe(12),
 		}, format='json')
 		self.assertEqual(resp.status_code, 400)
 		self.assertEqual(resp.data['error'], 'Invalid or expired code.')

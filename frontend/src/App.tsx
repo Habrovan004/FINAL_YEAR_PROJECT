@@ -78,8 +78,10 @@ function GlobalControls() {
     location.pathname === '/' ||
     ONBOARDING_PATH_PREFIXES.some(prefix => location.pathname.startsWith(prefix))
 
-  // Pages that render their own theme / language toggles in the header row.
-  const PAGES_WITH_OWN_CONTROLS = ['/provider/dashboard']
+  // Pages that render their own theme / language toggles in the header row —
+  // both chat screens have their own normalized header (back/avatar/title/
+  // bell) and must not also show the floating pill on top of the thread.
+  const PAGES_WITH_OWN_CONTROLS = ['/provider/dashboard', '/chat', '/provider/chats']
   if (PAGES_WITH_OWN_CONTROLS.includes(location.pathname)) return null
 
   const toggleLanguage = () => {
@@ -126,6 +128,17 @@ function GlobalControls() {
       </button>
     </div>
   )
+}
+
+// Both chat screens render their own inline notification bell (part of the
+// normalized chat header) — suppress the global floating one there so it
+// doesn't show up twice.
+const PAGES_WITH_OWN_BELL = ['/chat', '/provider/chats']
+
+function GlobalNotificationBell() {
+  const location = useLocation()
+  if (PAGES_WITH_OWN_BELL.includes(location.pathname)) return null
+  return <NotificationBell />
 }
 
 function App() {
@@ -175,7 +188,7 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
               <GlobalControls />
-              <NotificationBell />
+              <GlobalNotificationBell />
             </BrowserRouter>
           </AuthProvider>
         </TextSizeProvider>

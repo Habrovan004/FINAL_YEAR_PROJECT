@@ -30,7 +30,7 @@ interface DashboardPayload {
   appointments: {
     upcoming_count: number
     missed_count: number
-    today: { id: number; patient: string; time: string; type: string }[]
+    today: { id: number; patient: string; patient_id: number; time: string; type: string }[]
   }
   critical_alerts: {
     id: number
@@ -126,13 +126,21 @@ function riskColor(r: string) {
 // ── Patient slide-in panel ────────────────────────────────────────────────────
 
 function PatientPanel({
-  patientId, patientName, onClose,
-}: { patientId: number; patientName: string; onClose: () => void }) {
+  patientId, patientName, onClose, onRecordVisit,
+}: { patientId: number; patientName: string; onClose: () => void; onRecordVisit: () => void }) {
   const { t } = useTranslation()
   const nav = useNavigate()
   const [detail, setDetail] = useState<PatientDetailData | null>(null)
   const [loading, setLoading] = useState(true)
   const [messaging, setMessaging] = useState(false)
+
+  const [reassignOpen, setReassignOpen] = useState(false)
+  const [reassignProviders, setReassignProviders] = useState<{ id: number; full_name: string; specialization: string }[] | null>(null)
+  const [reassignLoading, setReassignLoading] = useState(false)
+  const [reassignSubmitting, setReassignSubmitting] = useState(false)
+  const [reassignError, setReassignError] = useState('')
+  const [reassignSuccess, setReassignSuccess] = useState(false)
+  const [selectedNewProviderId, setSelectedNewProviderId] = useState('')
 
   useEffect(() => {
     setLoading(true)
@@ -151,6 +159,42 @@ function PatientPanel({
       nav(`/provider/chats?room=${res.data.id}`)
     } finally {
       setMessaging(false)
+    }
+  }
+
+  const toggleReassign = async () => {
+    if (reassignOpen) {
+      setReassignOpen(false)
+      return
+    }
+    setReassignOpen(true)
+    setReassignSuccess(false)
+    if (reassignProviders != null) return
+    setReassignLoading(true)
+    setReassignError('')
+    try {
+      const r = await api.get(`/patients/${patientId}/available-providers/`)
+      setReassignProviders(r.data)
+    } catch {
+      setReassignError('Could not load providers.')
+    } finally {
+      setReassignLoading(false)
+    }
+  }
+
+  const confirmReassign = async () => {
+    if (!selectedNewProviderId || reassignSubmitting) return
+    setReassignSubmitting(true)
+    setReassignError('')
+    try {
+      await api.post(`/patients/${patientId}/reassign/`, { new_provider_id: parseInt(selectedNewProviderId) })
+      setReassignSuccess(true)
+      setReassignProviders(null)
+      setSelectedNewProviderId('')
+    } catch (e: any) {
+      setReassignError(e?.response?.data?.error || 'Could not reassign this patient.')
+    } finally {
+      setReassignSubmitting(false)
     }
   }
 
@@ -216,12 +260,97 @@ function PatientPanel({
                 width: '100%', background: '#D4537E', color: '#fff', border: 'none',
                 padding: '10px 14px', borderRadius: 10, fontWeight: 700, fontSize: '0.75rem',
                 cursor: messaging ? 'not-allowed' : 'pointer', opacity: messaging ? 0.7 : 1,
-                fontFamily: "'DM Sans', system-ui, sans-serif", marginBottom: 16,
+                fontFamily: "'DM Sans', system-ui, sans-serif", marginBottom: 10,
               }}
             >
               {messaging ? <Loader2 size={14} className="provider-spin" /> : <MessageCircle size={14} />}
               {t('provider_message_mother')}
             </button>
+
+            <button
+              type="button"
+              onClick={onRecordVisit}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                width: '100%', background: 'transparent', color: '#D4537E',
+                border: '1.5px solid #D4537E', padding: '10px 14px', borderRadius: 10,
+                fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer',
+                fontFamily: "'DM Sans', system-ui, sans-serif", marginBottom: 16,
+              }}
+            >
+              <Stethoscope size={14} />
+              {t('provider_record_anc_visit')}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void toggleReassign()}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                width: '100%', background: 'transparent', color: 'var(--pv-text-muted)',
+                border: '1px dashed var(--pv-border)', padding: '8px 14px', borderRadius: 10,
+                fontWeight: 700, fontSize: '0.6875rem', cursor: 'pointer',
+                fontFamily: "'DM Sans', system-ui, sans-serif", marginBottom: reassignOpen ? 10 : 16,
+              }}
+            >
+              {t('provider_reassign_provider')}
+            </button>
+
+            {reassignOpen && (
+              <div style={{ background: 'var(--pv-bg)', borderRadius: 10, padding: '10px 12px', marginBottom: 16 }}>
+                {reassignSuccess ? (
+                  <p style={{ fontSize: '0.75rem', color: '#16a34a', margin: 0 }}>{t('provider_reassign_success')}</p>
+                ) : reassignLoading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0' }}>
+                    <Loader2 size={16} className="provider-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {reassignError && (
+                      <p style={{ fontSize: '0.6875rem', color: 'var(--pv-error)', marginBottom: 6 }}>{reassignError}</p>
+                    )}
+                    {reassignProviders && reassignProviders.length === 0 ? (
+                      <p style={{ fontSize: '0.6875rem', color: 'var(--pv-text-muted)', margin: 0 }}>
+                        {t('provider_reassign_none_available')}
+                      </p>
+                    ) : (
+                      <>
+                        <label style={{ fontSize: '0.6875rem', color: 'var(--pv-text-muted)', fontWeight: 600 }}>
+                          {t('provider_reassign_pick')}
+                        </label>
+                        <select
+                          value={selectedNewProviderId}
+                          onChange={e => setSelectedNewProviderId(e.target.value)}
+                          style={{
+                            width: '100%', marginTop: 4, marginBottom: 8, padding: '8px 10px',
+                            borderRadius: 8, border: '0.5px solid var(--pv-border-input)',
+                            background: 'var(--pv-card)', color: 'var(--pv-text)', fontSize: '0.75rem',
+                          }}
+                        >
+                          <option value="">—</option>
+                          {(reassignProviders || []).map(p => (
+                            <option key={p.id} value={p.id}>{p.full_name} · {p.specialization}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={!selectedNewProviderId || reassignSubmitting}
+                          onClick={() => void confirmReassign()}
+                          style={{
+                            width: '100%', background: '#D4537E', color: '#fff', border: 'none',
+                            padding: '8px 12px', borderRadius: 8, fontWeight: 700, fontSize: '0.6875rem',
+                            cursor: (!selectedNewProviderId || reassignSubmitting) ? 'not-allowed' : 'pointer',
+                            opacity: (!selectedNewProviderId || reassignSubmitting) ? 0.6 : 1,
+                          }}
+                        >
+                          {reassignSubmitting ? <Loader2 size={12} className="provider-spin" /> : t('provider_reassign_confirm')}
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             <p style={{ fontSize: '0.625rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: '#D4537E', fontWeight: 700, marginBottom: 10 }}>
               {t('provider_recent_anc_visits')}
@@ -279,6 +408,7 @@ export default function ProviderDashboard() {
 
   const [ancOpen, setAncOpen] = useState(false)
   const [ancPatients, setAncPatients] = useState<PatientRow[]>([])
+  const [ancPreselectedId, setAncPreselectedId] = useState<number | undefined>(undefined)
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [todayCount, setTodayCount] = useState(0)
   const [toast, setToast] = useState<{ message: string } | null>(null)
@@ -371,7 +501,7 @@ export default function ProviderDashboard() {
 
   const handleSaved = (res: ANCSaveResponse) => {
     setAncOpen(false)
-    setAncPatients(patients)
+    setAncPreselectedId(undefined)
     void load(true)
     setToast({ message: t('provider_ai_recorded_success') })
     // High-risk saves jump straight to the patient's detail panel so the
@@ -396,9 +526,8 @@ export default function ProviderDashboard() {
     }, 300)
   }
 
-  const startVisitFor = (patientName: string) => {
-    const matched = patients.filter(p => p.full_name === patientName)
-    setAncPatients(matched.length > 0 ? matched : patients)
+  const startVisitFor = (patientId: number) => {
+    setAncPreselectedId(patientId)
     setAncOpen(true)
   }
 
@@ -842,7 +971,7 @@ export default function ProviderDashboard() {
                       fontSize: '0.6875rem', fontWeight: 700, cursor: 'pointer',
                       fontFamily: "'DM Sans', system-ui, sans-serif", flexShrink: 0,
                     }}
-                    onClick={() => startVisitFor(a.patient)}
+                    onClick={() => startVisitFor(a.patient_id)}
                   >
                     {t('provider_start_visit')}
                   </button>
@@ -1005,7 +1134,7 @@ export default function ProviderDashboard() {
             fontFamily: "'DM Sans', system-ui, sans-serif",
             transition: 'opacity 0.15s',
           }}
-          onClick={() => { if (!ancOpen) setAncOpen(true) }}
+          onClick={() => { if (!ancOpen) { setAncPreselectedId(undefined); setAncOpen(true) } }}
           disabled={ancOpen}
         >
           {ancOpen ? (
@@ -1025,7 +1154,8 @@ export default function ProviderDashboard() {
       <ANCVisitModal
         open={ancOpen}
         patients={ancPatients}
-        onClose={() => { setAncOpen(false); setAncPatients(patients) }}
+        preselectedPatientId={ancPreselectedId}
+        onClose={() => { setAncOpen(false); setAncPreselectedId(undefined) }}
         onSaved={handleSaved}
       />
 
@@ -1041,6 +1171,11 @@ export default function ProviderDashboard() {
           patientId={selectedPatient.id}
           patientName={selectedPatient.name}
           onClose={() => setSelectedPatient(null)}
+          onRecordVisit={() => {
+            setSelectedPatient(null)
+            setAncPreselectedId(selectedPatient.id)
+            setAncOpen(true)
+          }}
         />
       )}
 

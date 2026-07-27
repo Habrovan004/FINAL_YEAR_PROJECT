@@ -86,6 +86,13 @@ export default function HomePage() {
 
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [chatUnread, setChatUnread] = useState(0)
+
+  useEffect(() => {
+    api.get('/chat/unread-count/')
+      .then(r => setChatUnread(r.data.unread_count || 0))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     api.get('/patients/dashboard/')
@@ -241,8 +248,9 @@ export default function HomePage() {
                     className={`action-btn${danger ? ' danger' : ''}`}
                     onClick={() => nav(to)}
                 >
-                  <div className="action-icon-wrap">
+                  <div className="action-icon-wrap" style={{ position: 'relative' }}>
                     <Icon size={22} />
+                    {to === '/chat' && chatUnread > 0 && <span className="notif-badge" />}
                   </div>
                   <span className="action-label">{label}</span>
                   <span className="action-sub">{sub}</span>

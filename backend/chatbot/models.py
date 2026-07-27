@@ -42,6 +42,13 @@ class Message(models.Model):
         ('chatbot', 'Health Assistant'),
         ('mother', 'Mother'),
         ('provider', 'Provider'),
+        ('system', 'System'),
+    ]
+
+    MESSAGE_TYPE_CHOICES = [
+        ('text', 'Text'),
+        ('visit_summary', 'ANC Visit Summary'),
+        ('system', 'System notice'),
     ]
 
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages_v2')
@@ -50,7 +57,12 @@ class Message(models.Model):
         related_name='sent_messages'
     )
     sender_type = models.CharField(max_length=10, choices=SENDER_TYPE_CHOICES)
+    message_type = models.CharField(max_length=20, choices=MESSAGE_TYPE_CHOICES, default='text')
     content = models.TextField()
+    # Snapshot payload for non-text message types (e.g. the ANC visit's
+    # values at the moment it was inserted into the chat) so the card
+    # renders correctly even if the underlying visit is later edited.
+    metadata = models.JSONField(default=dict, blank=True)
     triggered_escalation = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

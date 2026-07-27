@@ -14,6 +14,7 @@ class Notification(models.Model):
         ('appointment_declined', 'Appointment declined'),
         ('appointment_time_proposed', 'Appointment new time proposed'),
         ('appointment_cancelled', 'Appointment cancelled'),
+        ('chat_escalated', 'Chat escalated to provider'),
     ]
 
     recipient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')

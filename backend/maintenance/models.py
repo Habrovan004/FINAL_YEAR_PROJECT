@@ -13,6 +13,7 @@ class AuditLog(models.Model):
         ('backup', 'Database Backup'),
         ('system_update', 'System Update'),
         ('scheduled_task', 'Scheduled Task Run'),
+        ('chat_msg_delete', 'Chat Message Deletion'),
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)

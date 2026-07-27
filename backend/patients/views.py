@@ -8,15 +8,18 @@ from tips.models import Tip
 from tips.serializers import TipSerializer
 from tracking.models import MoodLog, Symptom, SymptomReport
 from appointments.models import Appointment
-from accounts.models import User
+from accounts.models import User, ProviderProfile
 from accounts.serializers import UserSerializer
 from clinical.models import ANCVisit
 from clinical.serializers import ANCVisitSerializer
-from django.db.models import Q
+from django.db.models import Q, F
+from django.db import transaction as db_transaction
+from django.utils import timezone
 from datetime import date
 import random
 import json
 from .utils import assign_provider_to_mother
+from .permissions import get_patient_or_404
 from chat.models import Message
 
 @api_view(['GET', 'PUT', 'PATCH'])
@@ -349,26 +352,128 @@ def patient_list(request):
 @permission_classes([IsAuthenticated])
 def patient_detail(request, patient_id):
     """Full patient view: profile + visit history. Provider-scoped."""
-    try:
-        patient_user = User.objects.get(pk=patient_id, user_type='patient')
-    except User.DoesNotExist:
-        return Response({'error': 'Patient not found.'}, status=status.HTTP_404_NOT_FOUND)
+    if request.user.user_type == 'provider':
+        # 404 (not 403) for a patient not assigned to this provider, so
+        # patient IDs belonging to other providers can't be enumerated.
+        patient_user = get_patient_or_404(request, patient_id)
+    else:
+        try:
+            patient_user = User.objects.get(pk=patient_id, user_type='patient')
+        except User.DoesNotExist:
+            return Response({'error': 'Patient not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if request.user != patient_user:
+            return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
 
     profile = getattr(patient_user, 'profile', None)
     if not profile:
         return Response({'error': 'Patient has no profile.'}, status=status.HTTP_404_NOT_FOUND)
-
-    if request.user.user_type == 'provider':
-        provider_profile = getattr(request.user, 'provider_profile', None)
-        if profile.assigned_provider_id != getattr(provider_profile, 'id', None):
-            return Response({'error': 'This patient is not assigned to you.'},
-                            status=status.HTTP_403_FORBIDDEN)
-    elif request.user != patient_user:
-        return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
 
     visits = ANCVisit.objects.filter(patient=patient_user).order_by('-visit_date')
     return Response({
         'summary': _summarize_patient(profile),
         'profile': PatientProfileSerializer(profile).data,
         'visits': ANCVisitSerializer(visits, many=True).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def available_providers_for_reassignment(request, patient_id):
+    """Providers at the mother's hospital she could be reassigned to (excludes
+    her current provider). Used to populate the reassignment picker."""
+    if request.user.user_type != 'provider':
+        return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+
+    patient_user = get_patient_or_404(request, patient_id)
+    profile = getattr(patient_user, 'profile', None)
+    if not profile:
+        return Response({'error': 'Patient has no profile.'}, status=status.HTTP_404_NOT_FOUND)
+
+    qs = ProviderProfile.objects.filter(is_available=True).select_related('user', 'hospital')
+    if profile.hospital_id:
+        qs = qs.filter(hospital_id=profile.hospital_id)
+    if profile.assigned_provider_id:
+        qs = qs.exclude(pk=profile.assigned_provider_id)
+
+    return Response([{
+        'id': p.id,
+        'full_name': p.user.full_name,
+        'specialization': p.get_specialization_display(),
+        'current_workload': p.current_workload,
+        'max_workload': p.max_workload,
+    } for p in qs])
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def reassign_patient(request, patient_id):
+    """Reassign a mother to a different provider. Transfers her active
+    chatbot conversation (if any) with history intact, and drops a system
+    message in that thread noting the change and date.
+    """
+    if request.user.user_type != 'provider':
+        return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+
+    # 404s if the requesting provider isn't the mother's *current* provider —
+    # only the provider currently responsible for her can hand her off.
+    patient_user = get_patient_or_404(request, patient_id)
+    profile = getattr(patient_user, 'profile', None)
+    if not profile:
+        return Response({'error': 'Patient has no profile.'}, status=status.HTTP_404_NOT_FOUND)
+
+    new_provider_id = request.data.get('new_provider_id')
+    if not new_provider_id:
+        return Response({'error': 'new_provider_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        new_provider_profile = ProviderProfile.objects.select_related('user').get(pk=new_provider_id)
+    except ProviderProfile.DoesNotExist:
+        return Response({'error': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    old_provider_profile = profile.assigned_provider
+    if old_provider_profile and old_provider_profile.id == new_provider_profile.id:
+        return Response({'error': 'Patient is already assigned to this provider.'},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    with db_transaction.atomic():
+        profile.assigned_provider = new_provider_profile
+        profile.save(update_fields=['assigned_provider'])
+
+        if old_provider_profile:
+            ProviderProfile.objects.filter(pk=old_provider_profile.id).update(
+                current_workload=F('current_workload') - 1
+            )
+        ProviderProfile.objects.filter(pk=new_provider_profile.id).update(
+            current_workload=F('current_workload') + 1
+        )
+
+        # Transfer the active chatbot conversation, if one exists, and note
+        # the change in the thread — for both the old and new provider, and
+        # for the mother, since it's the same shared message history.
+        from chatbot.models import Conversation, Message as ChatMessage
+
+        convo = (
+            Conversation.objects
+            .filter(mother=patient_user, is_active=True)
+            .order_by('-updated_at')
+            .first()
+        )
+        if convo:
+            convo.provider = new_provider_profile.user
+            convo.save(update_fields=['provider', 'updated_at'])
+            ChatMessage.objects.create(
+                conversation=convo,
+                sender=None,
+                sender_type='system',
+                message_type='system',
+                content=(
+                    f"Care provider changed to {new_provider_profile.user.full_name} "
+                    f"on {timezone.localdate().isoformat()}."
+                ),
+            )
+
+    return Response({
+        'success': True,
+        'new_provider_id': new_provider_profile.id,
+        'new_provider_name': new_provider_profile.user.full_name,
     })

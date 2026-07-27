@@ -9,6 +9,7 @@ from notifications.models import Notification
 from maintenance.models import AuditLog
 from datetime import date
 from django.db import IntegrityError
+from django.db.models import Q
 
 # An active row (requested or upcoming) reserves its slot; cancelled/missed/
 # attended rows don't (mirrors the partial DB constraint on Appointment).
@@ -127,11 +128,12 @@ def appointment_list(request):
 @api_view(['PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def appointment_detail(request, pk):
+    # Scoped in the query itself and 404 (not 403) on a mismatch, so an
+    # authenticated user can't confirm a foreign appointment ID exists.
     try:
-        # Check permission: Only owner or assigned provider can access
-        appointment = Appointment.objects.get(pk=pk)
-        if appointment.user != request.user and appointment.provider != request.user:
-             return Response({'error': 'Unauthorized'}, status=403)
+        appointment = Appointment.objects.get(
+            Q(pk=pk) & (Q(user=request.user) | Q(provider=request.user))
+        )
     except Appointment.DoesNotExist:
         return Response({'error': 'Not found'}, status=404)
 

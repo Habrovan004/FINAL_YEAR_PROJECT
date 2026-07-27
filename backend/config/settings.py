@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from datetime import timedelta
 from decouple import config
@@ -100,6 +101,16 @@ else:
         }
     }
 
+# `manage.py test` needs to CREATE a throwaway database, which the local dev
+# Postgres role isn't necessarily granted — swap in in-memory SQLite for test
+# runs only, so `python manage.py test` works with zero extra DB setup. Dev
+# and production both keep using the real Postgres config above untouched.
+if 'test' in sys.argv:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': ':memory:',
+    }
+
 AUTH_USER_MODEL = 'accounts.User'
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -156,11 +167,14 @@ CSRF_TRUSTED_ORIGINS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'accounts.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_RATES': {
+        'chat_message_send': '30/min',
+    },
 }
 
 # Email backend — console in dev, SMTP in production via env vars

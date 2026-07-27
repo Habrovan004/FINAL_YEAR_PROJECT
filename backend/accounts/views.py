@@ -295,6 +295,7 @@ def provider_dashboard(request):
             'today': [{
                 'id': a.id,
                 'patient': a.user.full_name,
+                'patient_id': a.user_id,
                 'time': str(a.appointment_time),
                 'type': a.get_visit_type_display()
             } for a in upcoming_appts.filter(appointment_date=today_date)]

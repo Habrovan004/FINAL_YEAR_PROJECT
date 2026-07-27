@@ -365,6 +365,61 @@ body:has(.provider-page) .global-controls {
 .anc-save-btn:hover:not(:disabled) { background: #c2436d; }
 .anc-save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
+/* Patient typeahead */
+.anc-typeahead { position: relative; }
+.anc-typeahead-input-wrap { position: relative; }
+.anc-typeahead-icon {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  color: var(--pv-text-muted); pointer-events: none;
+}
+.anc-typeahead-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  max-height: 220px; overflow-y: auto;
+  background: var(--pv-card); border: 0.5px solid var(--pv-border);
+  border-radius: 10px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  z-index: 20;
+}
+.anc-typeahead-option {
+  display: flex; flex-direction: column; gap: 2px;
+  width: 100%; text-align: left; background: transparent; border: none;
+  padding: 8px 12px; cursor: pointer;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  border-bottom: 0.5px solid var(--pv-border);
+}
+.anc-typeahead-option:last-child { border-bottom: none; }
+.anc-typeahead-option:hover { background: var(--pv-chip-bg); }
+.anc-typeahead-option-name { font-size: 0.8125rem; font-weight: 600; color: var(--pv-text); }
+.anc-typeahead-option-meta { font-size: 0.6875rem; color: var(--pv-text-muted); }
+.anc-typeahead-empty {
+  display: flex; align-items: center; gap: 6px; justify-content: center;
+  padding: 12px; font-size: 0.75rem; color: var(--pv-text-muted);
+}
+
+.anc-locked-patient {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--pv-bg); border: 0.5px solid var(--pv-border-input);
+  border-radius: 10px; padding: 10px 14px;
+  font-size: 0.8125rem; font-weight: 600; color: var(--pv-text);
+}
+.anc-locked-patient svg { color: var(--pv-accent); flex-shrink: 0; }
+
+/* Draft-resume banner */
+.anc-draft-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--pv-chip-bg); border: 0.5px solid var(--pv-border);
+  border-radius: 12px; padding: 10px 14px;
+}
+.anc-draft-banner-title { font-size: 0.75rem; font-weight: 700; color: var(--pv-text); margin: 0; }
+.anc-draft-banner-body { font-size: 0.6875rem; color: var(--pv-text-muted); margin: 2px 0 0; }
+.anc-draft-banner-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.anc-draft-resume, .anc-draft-discard {
+  border: none; border-radius: 999px; padding: 6px 12px;
+  font-size: 0.6875rem; font-weight: 700; cursor: pointer;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.anc-draft-resume { background: var(--pv-accent); color: #fff; }
+.anc-draft-discard { background: transparent; color: var(--pv-text-muted); border: 0.5px solid var(--pv-border); }
+
 /* ---------------------------------------------------------------------------
    Success toast
 --------------------------------------------------------------------------- */

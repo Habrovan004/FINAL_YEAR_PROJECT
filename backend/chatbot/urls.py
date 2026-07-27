@@ -12,4 +12,5 @@ urlpatterns = [
     path('message/', views.post_message, name='post-message'),
     path('provider/queue/', views.provider_queue, name='provider-queue'),
     path('provider/reply/', views.provider_reply, name='provider-reply'),
+    path('provider/insert-visit/', views.provider_insert_visit_summary, name='provider-insert-visit'),
 ]

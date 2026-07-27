@@ -44,6 +44,20 @@
 
 .chat-back:hover { background: var(--bg-pink); color: var(--accent); }
 
+.chat-avatar-circle {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-page));
+  color: var(--text-pink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
 .chat-title { flex: 1; min-width: 0; }
 .chat-title-row {
   display: flex;
@@ -111,12 +125,191 @@
   gap: 10px;
 }
 
-.bubble-wrap { display: flex; }
-.bubble-wrap.me { justify-content: flex-end; }
-.bubble-wrap.other { justify-content: flex-start; }
+.chat-direct-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ───────────────────────── Direct-message thread scroll container ─────────────────────────
+   Owned by DirectMessageThread itself so both the mother's and provider's
+   screens anchor to the bottom, keep position stable when older history is
+   prepended, and share one "new message" chip implementation. */
+.dm-thread-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.dm-thread-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  /* Short threads bunch at the bottom, next to the input, instead of
+     floating at the top with empty space below. Spacing between messages is
+     controlled per-message (inline marginTop) so grouped bubbles can sit
+     closer together than separate groups — no uniform gap here. */
+  justify-content: flex-end;
+  padding: 14px;
+}
+.dm-new-message-chip {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
+}
+.dm-new-message-chip:hover { background: var(--accent-hover); }
+
+/* Column, not row — the group-sender label and read-receipt need to stack
+   above/below the bubble, not sit beside it. Horizontal alignment moves to
+   align-items (was justify-content, for the old row layout). */
+.bubble-wrap { display: flex; flex-direction: column; }
+.bubble-wrap.me { align-items: flex-end; }
+.bubble-wrap.other { align-items: flex-start; }
+
+/* The actual horizontal pairing of a bubble with its selection checkbox.
+   DOM order deliberately differs by side so the checkbox always sits on the
+   inner edge (toward the center of the thread): own messages render
+   checkbox-then-bubble (checkbox left of the bubble, which hugs the right);
+   other messages render bubble-then-checkbox (checkbox right of the bubble,
+   which hugs the left). */
+.dm-bubble-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.dm-select-checkbox {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-card);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+}
+.dm-select-checkbox.is-visible { display: flex; }
+@media (hover: hover) {
+  .bubble-wrap:hover .dm-select-checkbox { display: flex; }
+}
+.dm-select-checkbox.is-checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.dm-bubble-deleted {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  background: var(--bg-page);
+  border: 0.5px dashed var(--border);
+  box-shadow: none;
+}
+
+/* ───────────────────────── Selection mode action bar ───────────────────────── */
+.dm-selection-bar { background: var(--bg-card); }
+.dm-selection-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--error);
+  cursor: pointer;
+  padding: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+.dm-selection-delete-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--error) 12%, transparent); }
+.dm-selection-delete-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ───────────────────────── Delete-scope bottom sheet ───────────────────────── */
+.dm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+}
+.dm-dialog-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-card);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dm-dialog-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  margin-bottom: 8px;
+}
+.dm-dialog-option {
+  width: 100%;
+  padding: 13px;
+  border-radius: 12px;
+  border: 0.5px solid var(--border);
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.dm-dialog-option--destructive {
+  background: color-mix(in srgb, var(--error) 12%, var(--bg-page));
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 30%, var(--border));
+}
+.dm-dialog-note {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 4px 8px 8px;
+}
+.dm-dialog-cancel {
+  width: 100%;
+  padding: 13px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+}
 
 .bubble {
-  max-width: 78%;
+  max-width: 75%;
   padding: 10px 14px;
   border-radius: 16px;
   border: 0.5px solid var(--border);
@@ -143,6 +336,48 @@
 
 [data-theme='dark'] .bubble-provider { color: #93c5fd; }
 
+/* ───────────────────────── Direct-thread bubble colors ─────────────────────────
+   Deliberately separate from .bubble-mother/.bubble-provider above (those are
+   shared with the AI-escalation thread's sender_type-keyed styling and must
+   stay untouched) — own = pink accent fill, other party = neutral surface
+   with a hairline border, in both themes. */
+.dm-bubble-own {
+  background: color-mix(in srgb, var(--accent) 16%, var(--bg-card));
+  color: var(--text-pink);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-bottom-right-radius: 4px;
+}
+.dm-bubble-other {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 0.5px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+/* Grouped (not the first bubble in its run) — flatten the tail-side top
+   corner too, so consecutive bubbles from the same side read as one block. */
+.bubble-wrap.me .dm-bubble-own.dm-bubble-grouped { border-top-right-radius: 4px; }
+.bubble-wrap.other .dm-bubble-other.dm-bubble-grouped { border-top-left-radius: 4px; }
+
+.dm-group-sender {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: var(--text-tertiary);
+  margin: 0 0 3px 2px;
+  text-transform: uppercase;
+}
+
+.dm-read-receipt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin: 3px 2px 0;
+}
+
 .bubble-label {
   font-size: 9px;
   font-weight: 800;
@@ -158,6 +393,13 @@
   font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+.bubble-time {
+  font-size: 9.5px;
+  color: var(--text-tertiary);
+  margin-top: 3px;
+  text-align: right;
 }
 
 .chat-error {
@@ -188,8 +430,12 @@
   border-radius: 999px;
   padding: 10px 14px;
   font-size: 13px;
+  line-height: 1.4;
   outline: none;
   font-family: inherit;
+  resize: none;
+  max-height: 120px;
+  overflow-y: auto;
   transition: border-color 0.2s ease, background 0.25s ease;
 }
 .chat-input::placeholder { color: var(--text-tertiary); }
@@ -278,6 +524,15 @@
   background: rgba(255, 255, 255, 0.28);
   color: #ffffff;
 }
+.chat-header--live .chat-avatar-circle {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+}
+.chat-header--live .notif-bell-btn {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
 
 /* ───────────────────────── Typing indicator ─────────────────────────
    Three dots bouncing in sequence (0.3s stagger). */
@@ -346,6 +601,83 @@
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
+}
+
+/* ───────────────────────── Date separators ───────────────────────── */
+.chat-date-separator {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0;
+}
+.chat-date-separator span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--text-tertiary);
+  background: var(--bg-card);
+  border: 0.5px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 12px;
+}
+
+/* ───────────────────────── System messages (centered, muted) ───────────────────────── */
+.chat-system-msg {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0;
+}
+.chat-system-msg span {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-page);
+  border-radius: 999px;
+  padding: 4px 12px;
+  text-align: center;
+}
+
+/* ───────────────────────── ANC visit-card message ───────────────────────── */
+.visit-card-bubble {
+  background: color-mix(in srgb, #6366f1 12%, var(--bg-card));
+  border-color: color-mix(in srgb, #6366f1 26%, var(--border));
+  max-width: 86%;
+}
+.visit-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+}
+.visit-card-next {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* ───────────────────────── Optimistic send: pending / failed states ───────────────────────── */
+.bubble-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 10px;
+  opacity: 0.7;
+}
+.bubble-failed {
+  border-color: var(--error) !important;
+}
+.bubble-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  background: transparent;
+  border: none;
+  color: var(--error);
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
 }
 
 @keyframes typing-bounce {

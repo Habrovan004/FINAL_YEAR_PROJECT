@@ -57,6 +57,16 @@
   z-index: 90;
 }
 
+/* Embedded in a screen's own header row (chat headers) instead of floating
+   fixed in the corner — same button/badge/panel, natural document flow. */
+.notif-bell-wrap--inline {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: auto;
+  flex-shrink: 0;
+}
+
 .notif-bell-btn {
   position: relative;
   width: 34px;

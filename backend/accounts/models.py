@@ -35,6 +35,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_verified = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Touched (at most every few minutes) by JWTAuthentication on any
+    # authenticated API call — the closest proxy we have to "opened the app",
+    # used to decide whether a mother needs an SMS nudge on a provider reply.
+    last_active_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = 'phone_number'
     REQUIRED_FIELDS = ['full_name']

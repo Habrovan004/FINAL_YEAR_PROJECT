@@ -12,7 +12,15 @@ interface NotificationRow {
   created_at: string
 }
 
-export default function NotificationBell() {
+interface NotificationBellProps {
+  /** 'floating' (default) is the fixed, top-right corner placement used
+   * app-wide. 'inline' drops the fixed positioning so the same bell/badge/
+   * dropdown can sit naturally inside a screen's own header row — used by
+   * the chat headers, which show their own bell instead of the global one. */
+  variant?: 'floating' | 'inline'
+}
+
+export default function NotificationBell({ variant = 'floating' }: NotificationBellProps) {
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationRow[]>([])
@@ -47,7 +55,7 @@ export default function NotificationBell() {
   if (!user) return null
 
   return (
-    <div className="notif-bell-wrap">
+    <div className={variant === 'inline' ? 'notif-bell-wrap notif-bell-wrap--inline' : 'notif-bell-wrap'}>
       <button
         type="button"
         className="notif-bell-btn"

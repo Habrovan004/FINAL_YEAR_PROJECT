@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from .models import ANCVisit
 from .serializers import ANCVisitSerializer
 from accounts.models import User
+from patients.permissions import get_patient_or_404
 
 logger = logging.getLogger(__name__)
 
@@ -25,19 +26,13 @@ def anc_visit_list(request):
             return Response({'error': 'Only healthcare providers can record ANC visits.'},
                             status=status.HTTP_403_FORBIDDEN)
 
-        # Permission: provider can only record visits for their own patients
+        # Permission: provider can only record visits for their own patients.
+        # 404s (not 403) for a patient_id that exists but isn't assigned to
+        # this provider, so patient IDs belonging to other providers can't
+        # be enumerated by an authenticated-but-unrelated provider.
         patient_id = request.data.get('patient')
         if patient_id:
-            try:
-                patient = User.objects.get(pk=patient_id, user_type='patient')
-            except User.DoesNotExist:
-                return Response({'error': 'Patient not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-            provider_profile = getattr(request.user, 'provider_profile', None)
-            patient_profile = getattr(patient, 'profile', None)
-            if not patient_profile or patient_profile.assigned_provider_id != getattr(provider_profile, 'id', None):
-                return Response({'error': 'This patient is not assigned to you.'},
-                                status=status.HTTP_403_FORBIDDEN)
+            get_patient_or_404(request, patient_id)
 
         serializer = ANCVisitSerializer(data=request.data)
         if not serializer.is_valid():
@@ -61,8 +56,12 @@ def anc_visit_list(request):
         if not provider_profile:
             return Response({'error': 'Provider profile not found.'},
                             status=status.HTTP_404_NOT_FOUND)
-        # Restrict to assigned patients only
+        # Restrict to assigned patients only — 404 (not a silent empty list)
+        # for a patient_id that isn't assigned to this provider, so a bad or
+        # foreign patient_id gives an unambiguous signal instead of looking
+        # identical to "this patient just has no visits yet".
         if patient_id:
+            get_patient_or_404(request, patient_id)
             visits = ANCVisit.objects.filter(
                 patient_id=patient_id,
                 patient__profile__assigned_provider=provider_profile,
@@ -83,20 +82,16 @@ def anc_visit_list(request):
 @permission_classes([IsAuthenticated])
 def patient_summary(request, patient_id):
     """Summary of previous visits before recording a new one."""
-    try:
-        patient = User.objects.get(pk=patient_id, user_type='patient')
-    except User.DoesNotExist:
-        return Response({'error': 'Patient not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-    # Provider can only see their own patients
     if request.user.user_type == 'provider':
-        provider_profile = getattr(request.user, 'provider_profile', None)
-        patient_profile = getattr(patient, 'profile', None)
-        if not patient_profile or patient_profile.assigned_provider_id != getattr(provider_profile, 'id', None):
-            return Response({'error': 'This patient is not assigned to you.'},
-                            status=status.HTTP_403_FORBIDDEN)
-    elif request.user != patient:
-        return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+        # 404 (not 403) for a patient not assigned to this provider.
+        patient = get_patient_or_404(request, patient_id)
+    else:
+        try:
+            patient = User.objects.get(pk=patient_id, user_type='patient')
+        except User.DoesNotExist:
+            return Response({'error': 'Patient not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if request.user != patient:
+            return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
 
     visits = ANCVisit.objects.filter(patient=patient).order_by('-visit_date')
 

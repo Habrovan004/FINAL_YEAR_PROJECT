@@ -98,6 +98,13 @@ class ANCVisit(models.Model):
     risk_level = models.CharField(max_length=10, choices=RISK_LEVEL_CHOICES, default='low')
     risk_reasons = models.JSONField(default=list, blank=True, help_text="List of strings explaining why this visit was flagged")
     risk_level_override = models.BooleanField(default=False, help_text="Provider manually set the risk level — skip auto-calc")
+    auto_risk_level = models.CharField(
+        max_length=10, choices=RISK_LEVEL_CHOICES, default='low', blank=True,
+        help_text="Server-computed risk level, always recalculated and stored even when the provider overrides it",
+    )
+    risk_level_override_reason = models.TextField(
+        blank=True, default='', help_text="Required explanation when risk_level_override is True",
+    )
 
     # Recommendations stored with the visit
     recommendations = models.JSONField(default=list, blank=True)
@@ -244,13 +251,15 @@ class ANCVisit(models.Model):
     # ─────────────────────────── Save hook ────────────────────────────
 
     def save(self, *args, **kwargs):
+        level, reasons = self.evaluate_risk()
+        # Always store the server-computed level for audit, even when overridden.
+        self.auto_risk_level = level
         if not self.risk_level_override:
-            level, reasons = self.evaluate_risk()
             self.risk_level = level
             self.risk_reasons = reasons
+            self.risk_level_override_reason = ''
         elif not self.risk_reasons:
             # Manual override but no reasons given — record the auto reasons as context
-            _, reasons = self.evaluate_risk()
             self.risk_reasons = reasons
         # Always refresh recommendations so edits stay in sync
         self.recommendations = self.generate_recommendations()

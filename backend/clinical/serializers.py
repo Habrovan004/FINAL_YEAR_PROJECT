@@ -13,8 +13,25 @@ class ANCVisitSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = [
             'provider', 'visit_date',
-            'recommendations', 'risk_reasons',
+            'recommendations', 'risk_reasons', 'auto_risk_level',
         ]
+
+    def validate(self, attrs):
+        override = attrs.get(
+            'risk_level_override',
+            getattr(self.instance, 'risk_level_override', False),
+        )
+        if override:
+            reason = attrs.get(
+                'risk_level_override_reason',
+                getattr(self.instance, 'risk_level_override_reason', ''),
+            )
+            if not (reason or '').strip():
+                raise serializers.ValidationError({
+                    'risk_level_override_reason':
+                        'Please give a brief reason for overriding the auto-computed risk level.',
+                })
+        return attrs
 
     def validate_blood_pressure_systolic(self, value):
         if value < 60 or value > 250:

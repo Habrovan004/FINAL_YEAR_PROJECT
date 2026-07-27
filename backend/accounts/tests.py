@@ -1,5 +1,6 @@
 import secrets
 
+from django.core.cache import cache
 from rest_framework.test import APITestCase
 from .models import User, PasswordResetCode
 
@@ -11,6 +12,14 @@ TEST_PASSWORD = secrets.token_urlsafe(12)
 
 class PasswordResetTests(APITestCase):
 	def setUp(self):
+		# PasswordResetThrottle is a DRF AnonRateThrottle — keyed by IP, not
+		# phone number, via Django's cache. Every test method in this class
+		# makes at least one request to the throttled endpoint from the same
+		# test-client "IP", so without clearing the cache between tests the
+		# count accumulates across methods and the alphabetically-last one
+		# (which runs after 5 prior requests already consumed the 5/600s
+		# limit) gets a spurious 429 instead of the 200 it's asserting.
+		cache.clear()
 		self.phone = '0712345678'
 		self.user = User.objects.create_user(phone_number=self.phone, full_name='Test User', password=TEST_PASSWORD)
 

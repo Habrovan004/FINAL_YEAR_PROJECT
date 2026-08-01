@@ -8,7 +8,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('clinical', '0003_ancvisit_auto_risk_level_and_more'),
+        ('clinical', '0002_ancvisit_blood_group_ancvisit_fetal_heart_rate_bpm_and_more'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('chat', '0002_delete_videoconsultation'),
     ]

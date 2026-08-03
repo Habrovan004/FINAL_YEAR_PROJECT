@@ -64,11 +64,11 @@ def anc_visit_list(request):
             get_patient_or_404(request, patient_id)
             visits = ANCVisit.objects.filter(
                 patient_id=patient_id,
-                patient__profile__assigned_provider=provider_profile,
+                patient__profile__assignment__provider=provider_profile,
             )
         else:
             visits = ANCVisit.objects.filter(
-                patient__profile__assigned_provider=provider_profile,
+                patient__profile__assignment__provider=provider_profile,
             )
     else:
         # Patient sees their own visits regardless of patient_id param

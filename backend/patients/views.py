@@ -8,7 +8,7 @@ from tips.models import Tip
 from tips.serializers import TipSerializer
 from tracking.models import MoodLog, Symptom, SymptomReport
 from appointments.models import Appointment
-from accounts.models import User, ProviderProfile
+from accounts.models import Assignment, User, ProviderProfile
 from accounts.serializers import UserSerializer
 from clinical.models import ANCVisit
 from clinical.serializers import ANCVisitSerializer
@@ -48,6 +48,12 @@ def profile(request):
             if provider:
                 profile.assigned_provider = provider
                 profile.save()
+                # Mirror into Assignment so Task 5 readers (chat/ANC
+                # queries scoped by ``assignment__provider``) see the row.
+                Assignment.objects.update_or_create(
+                    mother=profile,
+                    defaults={'provider': provider, 'assigned_by': None},
+                )
 
         return Response(PatientProfileSerializer(profile).data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -105,6 +111,10 @@ def complete_onboarding(request):
         if provider:
             profile.assigned_provider = provider
             profile.save()
+            Assignment.objects.update_or_create(
+                mother=profile,
+                defaults={'provider': provider, 'assigned_by': None},
+            )
 
     return Response(UserSerializer(request.user).data, status=status.HTTP_200_OK)
 
@@ -430,12 +440,23 @@ def reassign_patient(request, patient_id):
     except ProviderProfile.DoesNotExist:
         return Response({'error': 'Provider not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-    old_provider_profile = profile.assigned_provider
+    # Read via ``current_provider`` (Assignment table) rather than the
+    # legacy FK so the "already assigned to this provider" short-circuit
+    # honours the source of truth Task 5 established.
+    old_provider_profile = profile.current_provider
     if old_provider_profile and old_provider_profile.id == new_provider_profile.id:
         return Response({'error': 'Patient is already assigned to this provider.'},
                         status=status.HTTP_400_BAD_REQUEST)
 
     with db_transaction.atomic():
+        # Write the new source of truth first: Assignment.provider. The
+        # legacy FK is dual-written until Task 5's follow-up drops the
+        # column entirely — remove the second write when that lands.
+        from accounts.models import Assignment
+        Assignment.objects.update_or_create(
+            mother=profile,
+            defaults={'provider': new_provider_profile, 'assigned_by': request.user},
+        )
         profile.assigned_provider = new_provider_profile
         profile.save(update_fields=['assigned_provider'])
 

@@ -66,6 +66,44 @@ class ProviderProfile(models.Model):
         # Explicit type conversion to avoid IDE errors
         return "Provider: " + str(self.user.full_name)
 
+class Assignment(models.Model):
+    """Single source of truth for which provider is currently responsible for
+    which mother. OneToOne on `mother` enforces the "one active assignment
+    per mother, always" invariant at the database level.
+
+    PROTECT on both FKs guarantees an accidental account deletion cannot
+    orphan a live care relationship — the assignment must be handed off
+    explicitly first.
+    """
+    objects = models.Manager()
+
+    mother = models.OneToOneField(
+        'patients.PatientProfile',
+        on_delete=models.PROTECT,
+        related_name='assignment',
+    )
+    provider = models.ForeignKey(
+        'accounts.ProviderProfile',
+        on_delete=models.PROTECT,
+        related_name='assignments',
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    # `assigned_by` is null for auto-assignments made by the system at
+    # registration; populated for admin- or provider-driven reassignments.
+    assigned_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assignments_made',
+    )
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    def __str__(self):
+        return f"Assignment: {self.mother.user.full_name} → {self.provider.user.full_name}"
+
+
 class PasswordResetCode(models.Model):
     """One-time code proving phone-number ownership before a password reset.
 

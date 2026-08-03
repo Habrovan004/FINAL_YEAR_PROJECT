@@ -63,6 +63,27 @@ class PatientProfile(models.Model):
     def __str__(self):
         return f"Profile of user #{self.user_id}"
 
+    @property
+    def current_provider(self):
+        """Single source of truth for who currently cares for this mother.
+
+        Reads the ``accounts.Assignment`` row (Task 2 introduced it as the
+        canonical store). Falls back to the legacy ``assigned_provider``
+        FK only if no Assignment row exists yet — which only happens for
+        rows created before the Task 2 backfill migration was applied.
+        The dual-write in RegisterSerializer, the admin reassign action,
+        the ``reassign_patient`` endpoint, and the ``assign_unassigned_mothers``
+        management command all keep the two in sync in the meantime, so
+        drift is only possible for historically-orphaned data.
+        """
+        # Local import: patients/models.py loads before accounts because
+        # accounts.Assignment references PatientProfile via a string FK.
+        from accounts.models import Assignment
+        try:
+            return self.assignment.provider
+        except Assignment.DoesNotExist:
+            return self.assigned_provider
+
 class BabyGrowth(models.Model):
     # Added Manager for IDE
     objects = models.Manager()

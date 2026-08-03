@@ -1,0 +1,56 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+    &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<p>You are about to reassign the following <strong>{{ assignments|length }}</strong> mother(s):</p>
+
+<ul>
+    {% for a in assignments %}
+    <li>
+        <strong>{{ a.mother.user.full_name }}</strong>
+        ({{ a.mother.user.phone_number }})
+        &mdash; currently with {{ a.provider.user.full_name }}
+    </li>
+    {% endfor %}
+</ul>
+
+<form method="post" action="">
+    {% csrf_token %}
+
+    <fieldset class="module aligned">
+        {% for field in form %}
+        <div class="form-row">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}
+            <p class="help">{{ field.help_text }}</p>
+            {% endif %}
+            {% if field.errors %}
+            <p class="errornote">{{ field.errors }}</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </fieldset>
+
+    <input type="hidden" name="action" value="{{ action_name }}">
+    {% for id in selected_action %}
+    <input type="hidden" name="_selected_action" value="{{ id }}">
+    {% endfor %}
+
+    <div class="submit-row">
+        <input type="submit" name="apply" value="Apply reassignment" class="default">
+        <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+</form>
+{% endblock %}

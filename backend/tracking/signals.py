@@ -45,8 +45,9 @@ def _dispatch_high_risk_alerts(report: SymptomReport) -> None:
     _send_sms(mother.phone_number, mother_body)
 
     profile = getattr(mother, 'profile', None)
-    if profile and profile.assigned_provider:
-        provider_user = profile.assigned_provider.user
+    current_provider = profile.current_provider if profile else None
+    if current_provider:
+        provider_user = current_provider.user
         provider_body = (
             f"MIMBA YANGU HIGH RISK: {mother.full_name} ({mother.phone_number}) "
             f"reported: {symptom_names}. Review immediately."

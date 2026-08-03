@@ -33,7 +33,14 @@ class IsAssignedProvider(BasePermission):
         if profile is None:
             return False
         provider_profile = getattr(request.user, 'provider_profile', None)
-        return bool(provider_profile) and profile.assigned_provider_id == provider_profile.id
+        if not provider_profile:
+            return False
+        # ``current_provider`` reads the Assignment table (Task 2), not the
+        # legacy FK on the profile row — so a reassignment made a moment
+        # ago is honoured on the very next request, no token rotation
+        # needed, and an old provider gets a 404 immediately.
+        current = profile.current_provider
+        return current is not None and current.pk == provider_profile.pk
 
     @staticmethod
     def _resolve_profile(obj):

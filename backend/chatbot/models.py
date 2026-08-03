@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.conf import settings
 
 
@@ -30,6 +31,18 @@ class Conversation(models.Model):
 
     class Meta:
         ordering = ['-updated_at']
+        constraints = [
+            # Partial unique index — one *active* conversation per mother,
+            # database-enforced. Deactivated historical conversations may
+            # freely coexist. Strictly stronger than a (mother, provider)
+            # constraint, and closes Postgres' NULL-distinctness loophole
+            # for pre-escalation rows where provider is NULL.
+            models.UniqueConstraint(
+                fields=['mother'],
+                condition=Q(is_active=True),
+                name='unique_active_conversation_per_mother',
+            ),
+        ]
 
     def __str__(self):
         return f"Conversation #{self.pk} ({self.type}) — {self.mother.full_name}"

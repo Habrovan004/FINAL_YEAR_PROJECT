@@ -72,7 +72,7 @@ def rooms(request):
 
         # Patient caller — resolve her own assigned provider, no patient_id needed.
         patient_profile = getattr(user, 'profile', None)
-        assigned_provider = patient_profile.assigned_provider if patient_profile else None
+        assigned_provider = patient_profile.current_provider if patient_profile else None
         if assigned_provider is None:
             return Response(
                 {'error': 'no_provider_assigned', 'detail': 'You do not have an assigned provider yet.'},

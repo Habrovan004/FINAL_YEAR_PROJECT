@@ -22,6 +22,7 @@ the AI service is unavailable, the engine returns a clearly-marked
 import logging
 from typing import Optional
 
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -31,7 +32,23 @@ from rest_framework.response import Response
 from .models import Conversation, Message
 from .ai_engine import process_message, is_ai_available, get_active_model
 from .escalation import notify_provider_of_escalation
+from accounts.models import Assignment
 from clinical.models import ANCVisit
+
+
+def _provider_owns_mother(provider_user, mother_user):
+    """Does this provider currently own this mother's care?
+
+    Consults the ``Assignment`` table via ``PatientProfile.current_provider``
+    (Task 5), so an old provider loses access on the very next request
+    after a reassignment — no token rotation needed.
+    """
+    profile = getattr(mother_user, 'profile', None)
+    provider_profile = getattr(provider_user, 'provider_profile', None)
+    if profile is None or provider_profile is None:
+        return False
+    current = profile.current_provider
+    return current is not None and current.pk == provider_profile.pk
 
 logger = logging.getLogger(__name__)
 
@@ -184,29 +201,30 @@ def conversation_entry(request):
         or 'en'
     )
 
-    convo = (
-        Conversation.objects
-        .filter(mother=request.user, is_active=True)
-        .order_by('-updated_at')
-        .first()
-    )
+    provider = None
+    profile = getattr(request.user, 'profile', None)
+    if profile:
+        current = profile.current_provider
+        if current:
+            provider = current.user
 
-    if not convo:
-        provider = None
-        profile = getattr(request.user, 'profile', None)
-        if profile and profile.assigned_provider:
-            provider = profile.assigned_provider.user
-        convo = Conversation.objects.create(
+    with transaction.atomic():
+        # Race-safe: the DB-level partial unique index on
+        # (mother, is_active=True) makes the INSERT half of get_or_create
+        # atomic — a concurrent duplicate request loses its INSERT with an
+        # IntegrityError and Django then returns the winning row.
+        convo, created = Conversation.objects.get_or_create(
             mother=request.user,
-            provider=provider,
-            type='chatbot',
+            is_active=True,
+            defaults={'provider': provider, 'type': 'chatbot'},
         )
-        Message.objects.create(
-            conversation=convo,
-            sender=None,
-            sender_type='chatbot',
-            content=_greeting(language),
-        )
+        if created:
+            Message.objects.create(
+                conversation=convo,
+                sender=None,
+                sender_type='chatbot',
+                content=_greeting(language),
+            )
 
     return Response(_serialize_conversation(convo, include_messages=True))
 
@@ -277,8 +295,10 @@ def post_message(request):
         convo.escalated_at = timezone.now()
         if not convo.provider:
             profile = getattr(request.user, 'profile', None)
-            if profile and profile.assigned_provider:
-                convo.provider = profile.assigned_provider.user
+            if profile:
+                current = profile.current_provider
+                if current:
+                    convo.provider = current.user
         convo.save(update_fields=['type', 'escalated_at', 'provider', 'updated_at'])
 
         logger.info(
@@ -324,7 +344,12 @@ def conversation_messages(request, conversation_id):
     """
     try:
         if request.user.user_type == 'provider':
-            convo = Conversation.objects.get(pk=conversation_id, provider=request.user)
+            # Access is decided by the mother's *current* Assignment, not
+            # by the FK on the conversation row (which could be a stale
+            # pre-reassignment provider).
+            convo = Conversation.objects.select_related('mother').get(pk=conversation_id)
+            if not _provider_owns_mother(request.user, convo.mother):
+                return Response({'error': 'Not found.'}, status=404)
         else:
             convo = Conversation.objects.get(pk=conversation_id, mother=request.user)
     except Conversation.DoesNotExist:
@@ -340,8 +365,19 @@ def provider_queue(request):
     if request.user.user_type != 'provider':
         return Response({'error': 'Forbidden.'}, status=403)
 
+    provider_profile = getattr(request.user, 'provider_profile', None)
+    if not provider_profile:
+        return Response([])
+
+    # Scope by *current* Assignment — an old provider who was reassigned
+    # away from a mother should not still see her in their queue, even if
+    # the Conversation.provider FK was never updated.
+    current_mother_user_ids = Assignment.objects.filter(
+        provider=provider_profile,
+    ).values_list('mother__user_id', flat=True)
+
     queryset = Conversation.objects.filter(
-        provider=request.user,
+        mother_id__in=current_mother_user_ids,
         type='provider',
         is_active=True,
     ).order_by('-escalated_at')
@@ -362,8 +398,10 @@ def provider_reply(request):
         return Response({'error': 'conversation_id and content are required.'}, status=400)
 
     try:
-        convo = Conversation.objects.get(pk=convo_id, provider=request.user, is_active=True)
+        convo = Conversation.objects.select_related('mother').get(pk=convo_id, is_active=True)
     except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation not found.'}, status=404)
+    if not _provider_owns_mother(request.user, convo.mother):
         return Response({'error': 'Conversation not found.'}, status=404)
 
     if convo.type != 'provider':
@@ -398,8 +436,10 @@ def provider_insert_visit_summary(request):
         return Response({'error': 'conversation_id and visit_id are required.'}, status=400)
 
     try:
-        convo = Conversation.objects.get(pk=convo_id, provider=request.user, is_active=True)
+        convo = Conversation.objects.select_related('mother').get(pk=convo_id, is_active=True)
     except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation not found.'}, status=404)
+    if not _provider_owns_mother(request.user, convo.mother):
         return Response({'error': 'Conversation not found.'}, status=404)
 
     try:
@@ -442,18 +482,19 @@ def bot_chat(request):
     if not text:
         return Response({'error': 'No text provided'}, status=400)
 
-    convo = (
-        Conversation.objects
-        .filter(mother=request.user, is_active=True)
-        .order_by('-updated_at')
-        .first()
-    )
-    if not convo:
-        provider = None
-        profile = getattr(request.user, 'profile', None)
-        if profile and profile.assigned_provider:
-            provider = profile.assigned_provider.user
-        convo = Conversation.objects.create(mother=request.user, provider=provider, type='chatbot')
+    provider = None
+    profile = getattr(request.user, 'profile', None)
+    if profile:
+        current = profile.current_provider
+        if current:
+            provider = current.user
+
+    with transaction.atomic():
+        convo, _ = Conversation.objects.get_or_create(
+            mother=request.user,
+            is_active=True,
+            defaults={'provider': provider, 'type': 'chatbot'},
+        )
 
     history_qs = list(convo.messages_v2.all())
     Message.objects.create(conversation=convo, sender=request.user, sender_type='mother', content=text)

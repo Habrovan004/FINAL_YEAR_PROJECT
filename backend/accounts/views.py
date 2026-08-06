@@ -178,6 +178,11 @@ def confirm_password_reset(request):
 @permission_classes([AllowAny])
 @throttle_classes([RegisterThrottle])
 def register(request):
+    # Prevent provider self-registration — providers must be invited by an admin.
+    requested_type = request.data.get('user_type')
+    if requested_type == 'provider':
+        return Response({'error': 'Provider accounts must be created by an admin. Please contact your hospital administrator.'}, status=status.HTTP_403_FORBIDDEN)
+
     serializer = RegisterSerializer(data=request.data)
     if serializer.is_valid():
         user = serializer.save()

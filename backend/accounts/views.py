@@ -12,11 +12,14 @@ from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .serializers import (
-    RegisterSerializer, LoginSerializer, UserSerializer
+    RegisterSerializer, LoginSerializer, UserSerializer, ProviderInviteSerializer
 )
-from .models import User, PasswordResetCode
+from .models import User, PasswordResetCode, ProviderProfile
 from .sms import sms
 from .throttles import LoginThrottle, PasswordResetThrottle, OTPVerifyThrottle, RegisterThrottle
+import random
+import string
+
 from appointments.models import Appointment
 from tracking.models import SymptomReport
 from emergency.models import EmergencyLog
@@ -158,11 +161,17 @@ def confirm_password_reset(request):
     if not reset_code or reset_code.is_expired():
         return invalid_code_response
 
+    # Set the user's new password and activate invited provider accounts
     user.set_password(new_password)
+    if not user.is_active:
+        user.is_active = True
+    if not user.is_verified:
+        user.is_verified = True
     user.save()
+
     reset_code.is_used = True
     reset_code.save(update_fields=['is_used'])
-    return Response({'message': 'Password reset successful.'}, status=status.HTTP_200_OK)
+    return Response({'message': 'Password set successfully.'}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -224,6 +233,59 @@ def logout(request):
 def me(request):
     _ = request.user
     return Response(UserSerializer(request.user).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def provider_invite(request):
+    """Admin-only: create a provider user in pending state and send setup code.
+
+    Expected payload: phone_number, email (optional), full_name, license_number (optional), hospital_id, specialization
+    """
+    # Only staff users (system/hospital admins) may invite providers
+    if not getattr(request.user, 'is_staff', False):
+        return Response({'error': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+
+    serializer = ProviderInviteSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = serializer.validated_data
+
+    phone = data.get('phone_number')
+    email = data.get('email', '')
+    full_name = data.get('full_name')
+    hospital = data.get('hospital_id')  # serializer returns Hospital instance
+    specialization = data.get('specialization')
+
+    # Prevent duplicates
+    if User.objects.filter(phone_number=phone).exists():
+        return Response({'error': 'A user with that phone number already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Create inactive provider user with unusable password
+    user = User(
+        phone_number=phone,
+        email=email or None,
+        full_name=full_name,
+        user_type='provider',
+        is_active=False,
+        is_verified=False,
+    )
+    user.set_unusable_password()
+    user.save()
+
+    # Create ProviderProfile
+    ProviderProfile.objects.create(user=user, hospital=hospital, specialization=specialization)
+
+    # Generate a password reset code / setup token and send via SMS (fallback none)
+    reset_code = PasswordResetCode.generate_for_user(user)
+    sent_via = 'none'
+    try:
+        _send_password_reset_sms(phone, reset_code.code)
+        sent_via = 'sms'
+    except Exception:
+        sent_via = 'none'
+
+    return Response({'message': 'Provider invited.', 'sent_via': sent_via}, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])

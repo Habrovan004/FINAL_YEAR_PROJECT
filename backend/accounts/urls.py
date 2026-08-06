@@ -11,4 +11,5 @@ urlpatterns = [
 
     # Provider Dashboard
     path('provider/dashboard/', views.provider_dashboard, name='provider-dashboard'),
+    path('providers/invite/', views.provider_invite, name='provider-invite'),
 ]

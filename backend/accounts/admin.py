@@ -20,6 +20,12 @@ class UserAdminChangeForm(UserChangeForm):
         model = User
         fields = '__all__'
 
+class ProviderProfileInline(admin.StackedInline):
+    model = ProviderProfile
+    fk_name = 'user'
+    extra = 0
+    readonly_fields = ('current_workload',)
+
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
     form = UserAdminChangeForm
@@ -43,6 +49,7 @@ class UserAdmin(BaseUserAdmin):
         }),
     )
     readonly_fields = ('last_login', 'created_at')
+    inlines = [ProviderProfileInline]
 
 @admin.register(ProviderProfile)
 class ProviderProfileAdmin(admin.ModelAdmin):

@@ -16,6 +16,7 @@ By default the command attaches patients/providers to the first available Hospit
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.contrib.auth import get_user_model
+import os
 
 try:
     from accounts.models import ProviderProfile
@@ -31,34 +32,35 @@ from hospitals.models import Hospital
 
 User = get_user_model()
 
+# Test user specs. Passwords must be provided via environment variables for safety.
+# For each user the command looks for TEST_USER_PASSWORD_<NAME_UPPER> (e.g. TEST_USER_PASSWORD_VERA)
+# and falls back to a generic TEST_USER_PASSWORD. If neither is set the command raises
+# a clear error. These env vars must be used only in local/dev/test environments and
+# NEVER committed to version control.
 TEST_USERS = {
     'vera': {
         'phone': '+255700000101',
         'full_name': 'Vera',
         'user_type': 'patient',
         'email': 'vera@example.test',
-        'password': 'MotherVera123!',
     },
     'lilian': {
         'phone': '+255700000102',
         'full_name': 'Lilian',
         'user_type': 'patient',
         'email': 'lilian@example.test',
-        'password': 'MotherLilian123!',
     },
     'hagai': {
         'phone': '+255700000103',
         'full_name': 'Hagai',
         'user_type': 'provider',
         'email': 'hagai@example.test',
-        'password': 'ProviderHagai123!',
     },
     'benedict': {
         'phone': '+255700000104',
         'full_name': 'Benedict',
         'user_type': 'provider',
         'email': 'benedict@example.test',
-        'password': 'ProviderBenedict123!',
     },
 }
 
@@ -81,6 +83,20 @@ class Command(BaseCommand):
 
         created = []
         updated = []
+
+        # Load passwords from environment variables. For each user, prefer
+        # TEST_USER_PASSWORD_<NAME> (e.g. TEST_USER_PASSWORD_VERA) and fall back to
+        # TEST_USER_PASSWORD. If no password is provided the command aborts with
+        # a clear error to avoid accidental weak/default passwords in commits.
+        for uname in TEST_USERS.keys():
+            per_var = f"TEST_USER_PASSWORD_{uname.upper()}"
+            generic_var = "TEST_USER_PASSWORD"
+            pw = os.environ.get(per_var) or os.environ.get(generic_var)
+            if not pw:
+                raise CommandError(
+                    f"Missing password for test user '{uname}'. Set environment variable {per_var} or {generic_var} (local/dev only). Do NOT commit secrets."
+                )
+            TEST_USERS[uname]['password'] = pw
 
         # Create provider users first so patients can be linked if desired
         for key in ('hagai', 'benedict'):

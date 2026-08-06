@@ -36,7 +36,5 @@ backend/config/settings_dev_sqlite.py
 backend/db_dev_sqlite.sqlite3
 
 backend/.env.txt
-
-backend/.env.txt
 backend/.env
 .env

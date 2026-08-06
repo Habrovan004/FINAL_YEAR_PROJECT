@@ -37,3 +37,6 @@ backend/db_dev_sqlite.sqlite3
 
 backend/.env.txt
 
+backend/.env.txt
+backend/.env
+.env

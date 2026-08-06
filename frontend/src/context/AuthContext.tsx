@@ -4,6 +4,25 @@ import axios from 'axios'
 import api from '../api/client'
 import { setAccessToken } from '../api/tokenStore'
 
+const SESSION_HINT_KEY = 'uzazi_has_session_hint'
+
+function setSessionHint(value: boolean) {
+  try {
+    if (value) localStorage.setItem(SESSION_HINT_KEY, '1')
+    else localStorage.removeItem(SESSION_HINT_KEY)
+  } catch {
+    // Ignore storage failures (private mode / disabled storage).
+  }
+}
+
+function getSessionHint() {
+  try {
+    return document.cookie.includes('mama_session=1')
+  } catch {
+    return false
+  }
+}
+
 // Session-bootstrap refresh is idempotent per page load — cache the in-flight
 // promise at module scope (not component state) so React.StrictMode's dev-only
 // double-invoke of this effect reuses the same request instead of firing a
@@ -21,6 +40,7 @@ interface User {
   is_onboarded: boolean
   hospital_id?: number | null
   hospital_name?: string | null
+  has_assigned_provider?: boolean
 }
 
 interface AuthCtx {
@@ -43,6 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
+    // Skip refresh bootstrap for clearly anonymous sessions.
+    if (!getSessionHint()) {
+      setIsLoading(false)
+      return () => { cancelled = true }
+    }
+
     // The access token only ever lives in memory, so a page reload loses it.
     // Recover a session by exchanging the httpOnly refresh cookie (if any).
     // Must bypass `api`'s 401-retry interceptor: a visitor with no cookie
@@ -60,10 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .then(r => {
           if (cancelled) return
           setAccessToken(r.data.access)
+          setSessionHint(true)
           return api.get('/auth/me/').then(res => setUser(res.data))
         })
         .catch(() => {
-          if (!cancelled) setAccessToken(null)
+          if (!cancelled) {
+            setAccessToken(null)
+            setSessionHint(false)
+          }
         })
         .finally(() => {
           if (!cancelled) setIsLoading(false)
@@ -75,12 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (phone_number: string, password: string) => {
     const { data } = await api.post('/auth/login/', { phone_number, password })
     setAccessToken(data.access)
+    setSessionHint(true)
     setUser(data.user)
   }
 
   const register = async (formData: any) => {
     const { data } = await api.post('/auth/register/', formData)
     setAccessToken(data.access)
+    setSessionHint(true)
     setUser(data.user)
   }
 
@@ -98,6 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // The refresh token travels via the httpOnly cookie, not the body.
     api.post('/auth/logout/').catch(() => {})
     setAccessToken(null)
+    setSessionHint(false)
     setUser(null)
   }
 

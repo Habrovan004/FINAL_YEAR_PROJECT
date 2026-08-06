@@ -116,7 +116,7 @@ Build a practical maternal telemedicine platform that supports safe pregnancy mo
 
 ## 6.2 Provider Journey
 
-1. Register as provider linked to hospital and specialization
+1. Providers are added by a hospital/system admin and do not self-register. An invited provider receives a one-time setup token (SMS) and completes their account via a secure setup flow.
 2. View provider dashboard statistics and alerts
 3. Receive escalated conversations from AI pipeline
 4. Reply to escalated and direct conversations

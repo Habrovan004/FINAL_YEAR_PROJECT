@@ -400,17 +400,16 @@ export default function OnboardingFlow() {
                     <label className="field-label">I am signing up as</label>
                     <div className="grid grid-cols-2 gap-2">
                       {([
-                        { v: 'patient', label: 'Mother' },
-                        { v: 'provider', label: 'Provider' },
-                      ] as { v: SignupRole; label: string }[]).map(r => (
-                        <button
-                          key={r.v}
-                          type="button"
-                          onClick={() => update('user_type', r.v)}
-                          className={`field-input text-center text-[11px] font-bold ${form.user_type === r.v ? 'bg-rose-50 border-rose-400 text-rose-500' : ''}`}
-                          style={{ padding: '10px 4px' }}
-                        >{r.label}</button>
-                      ))}
+                                              { v: 'patient', label: 'Mother' },
+                                            ] as { v: SignupRole; label: string }[]).map(r => (
+                                              <button
+                                                key={r.v}
+                                                type="button"
+                                                onClick={() => update('user_type', r.v)}
+                                                className={`field-input text-center text-[11px] font-bold ${form.user_type === r.v ? 'bg-rose-50 border-rose-400 text-rose-500' : ''}`}
+                                                style={{ padding: '10px 4px' }}
+                                              >{r.label}</button>
+                                            ))}
                     </div>
                   </div>
                   <div><label className="field-label" htmlFor="full_name">{t('full_name')}</label><input id="full_name" className={`field-input ${fieldErrors.full_name ? 'border-red-400' : ''}`} placeholder="e.g. Amani Wanjiku" value={form.full_name} onChange={e => update('full_name', e.target.value)} />{fieldErrors.full_name && <p className="ob-inline-error"><AlertCircle size={10} /> {fieldErrors.full_name}</p>}</div>

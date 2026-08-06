@@ -95,6 +95,22 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class ProviderInviteSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
+    email = serializers.EmailField(required=False, allow_blank=True)
+    full_name = serializers.CharField()
+    license_number = serializers.CharField(required=False, allow_blank=True)
+    hospital_id = serializers.IntegerField()
+    specialization = serializers.ChoiceField(choices=ProviderProfile.SPECIALIZATIONS)
+
+    def validate_hospital_id(self, value):
+        try:
+            h = Hospital.objects.get(pk=value)
+        except Hospital.DoesNotExist:
+            raise serializers.ValidationError('Hospital not found.')
+        return h
+
+
 class LoginSerializer(serializers.Serializer):
     phone_number = serializers.CharField()
     password = serializers.CharField(write_only=True)

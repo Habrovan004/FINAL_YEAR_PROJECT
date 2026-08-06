@@ -3,6 +3,7 @@ import { ArrowLeft, Clock, Building2, ChevronDown, CalendarPlus, Loader2, CheckC
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api from '../../api/client'
+import { useAuth } from '../../context/AuthContext'
 
 interface Appointment {
   id: number
@@ -28,6 +29,7 @@ type TabKey = 'upcoming' | 'completed' | 'book'
 export default function AppointmentsPage() {
   const nav = useNavigate()
   const { t, i18n } = useTranslation()
+  const { user } = useAuth()
   const locale = i18n.language?.startsWith('sw') ? 'sw-TZ' : 'en-US'
 
   const [tab, setTab] = useState<TabKey>('upcoming')
@@ -36,6 +38,8 @@ export default function AppointmentsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [cancellingId, setCancellingId] = useState<number | null>(null)
+
+  const canBookAppointment = user?.user_type !== 'patient' || user?.has_assigned_provider !== false
 
   const fetchAppointments = async () => {
     setLoading(true)
@@ -102,7 +106,7 @@ export default function AppointmentsPage() {
   }
 
   return (
-    <div className="min-h-screen pb-24 bg-[#faf9f7] flex justify-center">
+    <div className="appointments-screen min-h-screen pb-24 bg-[#faf9f7] flex justify-center">
       <div className="w-full max-w-lg p-5">
         <header className="flex items-center justify-between mb-6">
           <button
@@ -229,11 +233,38 @@ export default function AppointmentsPage() {
             )}
           </div>
         ) : (
-          <BookForm onSaved={() => setTab('upcoming')} />
+          user?.user_type === 'provider' ? (
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-amber-200">
+              <div className="flex items-start gap-3 text-amber-700">
+                <AlertCircle size={18} className="mt-0.5" />
+                <p className="text-sm font-semibold">{t('appts_provider_use_dashboard')}</p>
+              </div>
+            </div>
+          ) : canBookAppointment ? (
+            <BookForm onSaved={() => setTab('upcoming')} />
+          ) : (
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-amber-200">
+              <div className="flex items-start gap-3 text-amber-700">
+                <AlertCircle size={18} className="mt-0.5" />
+                <p className="text-sm font-semibold">{t('appts_no_provider_assigned')}</p>
+              </div>
+            </div>
+          )
         )}
       </div>
     </div>
   )
+}
+
+interface ApiError {
+  response?: {
+    status?: number
+    data?: {
+      error?: string
+      detail?: string
+      [key: string]: unknown
+    }
+  }
 }
 
 function BookForm({ onSaved }: { onSaved: () => void }) {
@@ -258,8 +289,17 @@ function BookForm({ onSaved }: { onSaved: () => void }) {
       await api.post('/appointments/', form)
       onSaved()
     } catch (e) {
-      console.error(e)
-      setError(t('appts_err_save'))
+      const err = e as ApiError
+      const apiError = err.response?.data?.error || err.response?.data?.detail
+      if (typeof apiError === 'string' && apiError.length > 0) {
+        if (apiError.includes('assigned a healthcare provider')) {
+          setError(t('appts_no_provider_assigned'))
+        } else {
+          setError(apiError)
+        }
+      } else {
+        setError(t('appts_err_save'))
+      }
     } finally {
       setLoading(false)
     }

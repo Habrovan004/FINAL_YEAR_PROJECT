@@ -34,10 +34,20 @@ def _set_refresh_cookie(response, refresh_token_str):
         samesite=settings.AUTH_COOKIE_SAMESITE,
         path='/',
     )
+    response.set_cookie(
+        key='mama_session',
+        value='1',
+        max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
+        httponly=False,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+        path='/',
+    )
 
 
 def _clear_refresh_cookie(response):
     response.delete_cookie(settings.AUTH_COOKIE, path='/')
+    response.delete_cookie('mama_session', path='/')
 
 
 class CookieTokenRefreshView(TokenRefreshView):

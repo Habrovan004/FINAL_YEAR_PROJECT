@@ -12,6 +12,7 @@ HOSPITALS = [
     {"name": "Ocean Road Cancer Institute", "latitude": -6.8020, "longitude": 39.2880, "type": "public", "address": "Ocean Road, Dar es Salaam", "phone": "+255222127200", "services": "Oncology (Specialized, not primary maternity)"},
     {"name": "St. Francis Hospital", "latitude": -7.0000, "longitude": 39.2000, "type": "private", "address": "Mbagala, Dar es Salaam", "phone": "+255754789012", "services": "General Care, Basic Maternity"},
     {"name": "Sinza Hospital", "latitude": -6.7800, "longitude": 39.2000, "type": "public", "address": "Sinza, Dar es Salaam", "phone": "+255222700000", "services": "General Care, Basic Maternity"},
+    {"name": "Amana Regional Referral Hospital", "latitude": -6.8225, "longitude": 39.2655, "type": "public", "address": "Ilala, Dar es Salaam", "phone": "+255 22 284 3301", "services": "Maternity Ward, ANC Clinics"},
 ]
 
 class Command(BaseCommand):

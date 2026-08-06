@@ -19,8 +19,20 @@ const TextSizeContext = createContext<TextSizeContextType>({
 })
 
 function readStored(): TextSize {
-  const saved = localStorage.getItem(STORAGE_KEY)
-  return saved === 'small' || saved === 'medium' || saved === 'large' ? saved : 'medium'
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved === 'small' || saved === 'medium' || saved === 'large' ? saved : 'medium'
+  } catch {
+    return 'medium'
+  }
+}
+
+function writeStored(size: TextSize) {
+  try {
+    localStorage.setItem(STORAGE_KEY, size)
+  } catch {
+    // Ignore storage failures in restricted browsers.
+  }
 }
 
 export function TextSizeProvider({ children }: { children: React.ReactNode }) {
@@ -32,7 +44,7 @@ export function TextSizeProvider({ children }: { children: React.ReactNode }) {
     // [data-theme] on <html> for the whole app.
     document.documentElement.style.fontSize = `${SCALE[textSize] * 100}%`
     document.documentElement.setAttribute('data-text-size', textSize)
-    localStorage.setItem(STORAGE_KEY, textSize)
+    writeStored(textSize)
   }, [textSize])
 
   const setTextSize = (size: TextSize) => setTextSizeState(size)

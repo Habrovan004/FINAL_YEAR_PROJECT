@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Search, Map as MapIcon, List, Loader2, CheckCircle2, MapPin, Calendar, Plus, Minus, Info, AlertCircle, HeartPulse, Bell, Volume2, Type } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
@@ -68,6 +68,8 @@ interface AxiosError {
   response?: { data?: any; status?: number }
 }
 
+type FieldErrorMap = Partial<Record<'full_name' | 'email' | 'phone_number' | 'password' | 'hospital' | 'general', string>>
+
 export default function OnboardingFlow() {
   const nav = useNavigate()
   const { i18n, t } = useTranslation()
@@ -91,6 +93,9 @@ export default function OnboardingFlow() {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
   const [fetchingHospitals, setFetchingHospitals] = useState(false)
   const [hospitalFetchError, setHospitalFetchError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrorMap>({})
+  const [submitError, setSubmitError] = useState('')
+  const submitLockRef = useRef(false)
 
   const fetchHospitals = useCallback(async (loc: [number, number]) => {
     setFetchingHospitals(true)
@@ -131,7 +136,17 @@ export default function OnboardingFlow() {
     return () => { cancelled = true }
   }, [step, fetchHospitals])
 
-  const update = (key: keyof FormData, val: FormDataValue) => setForm(p => ({ ...p, [key]: val }))
+  const update = (key: keyof FormData, val: FormDataValue) => {
+    setForm(p => ({ ...p, [key]: val }))
+    if (key === 'full_name' || key === 'email' || key === 'phone_number' || key === 'password') {
+      setFieldErrors(prev => ({ ...prev, [key]: undefined, general: undefined }))
+      setSubmitError('')
+    }
+    if (key === 'hospital') {
+      setFieldErrors(prev => ({ ...prev, hospital: undefined, general: undefined }))
+      setSubmitError('')
+    }
+  }
 
   const toggleSymptom = (name: string) => {
     const existing = form.initial_symptoms.find(s => s.name === name)
@@ -161,11 +176,21 @@ export default function OnboardingFlow() {
   }
 
   const handleFinish = async () => {
+    // State updates are async; use a ref lock to prevent rapid double-submit.
+    if (submitLockRef.current) return
+    submitLockRef.current = true
     setLoading(true)
+    setSubmitError('')
+    setFieldErrors({})
     try {
       if (!form.phone_number || !form.full_name || !form.password) {
         setStep(1)
-        alert('Please complete your account details first.')
+        setFieldErrors({
+          full_name: !form.full_name ? 'Full name is required.' : undefined,
+          phone_number: !form.phone_number ? 'Phone number is required.' : undefined,
+          password: !form.password ? 'Password is required.' : undefined,
+        })
+        setSubmitError('Please complete your account details first.')
         return
       }
 
@@ -224,20 +249,38 @@ export default function OnboardingFlow() {
       const axiosErr = err as AxiosError
       const data = axiosErr.response?.data
       let msg = 'Error completing setup'
+      const nextErrors: FieldErrorMap = {}
       if (axiosErr.response?.status === 429) {
         msg = 'Too many attempts from this device. Please wait a few minutes and try again.'
       } else if (data) {
-        if (data.phone_number) msg = `Phone number: ${data.phone_number[0]}`
-        else if (data.error) msg = data.error
-        else if (typeof data.detail === 'string') msg = data.detail
-        else if (typeof data === 'string') msg = data.slice(0, 100)
-        else {
-          const firstKey = Object.keys(data)[0]
-          if (Array.isArray(data[firstKey])) msg = `${firstKey}: ${data[firstKey][0]}`
+        if (typeof data === 'string') {
+          msg = data.slice(0, 100)
+        } else if (typeof data.detail === 'string') {
+          msg = data.detail
+        } else if (data.error) {
+          msg = data.error
+        } else {
+          if (Array.isArray(data.phone_number) && data.phone_number[0]) nextErrors.phone_number = String(data.phone_number[0])
+          if (Array.isArray(data.full_name) && data.full_name[0]) nextErrors.full_name = String(data.full_name[0])
+          if (Array.isArray(data.password) && data.password[0]) nextErrors.password = String(data.password[0])
+          if (Array.isArray(data.email) && data.email[0]) nextErrors.email = String(data.email[0])
+          if (Array.isArray(data.hospital_id) && data.hospital_id[0]) nextErrors.hospital = String(data.hospital_id[0])
+
+          if (nextErrors.phone_number) msg = `Phone number: ${nextErrors.phone_number}`
+          else if (nextErrors.hospital) msg = nextErrors.hospital
+          else {
+            const firstKey = Object.keys(data)[0]
+            if (firstKey && Array.isArray(data[firstKey])) msg = `${firstKey}: ${data[firstKey][0]}`
+          }
         }
       }
-      alert(msg)
+      setFieldErrors(nextErrors)
+      if (!Object.keys(nextErrors).length) {
+        setFieldErrors({ general: msg })
+      }
+      setSubmitError(msg)
     } finally {
+      submitLockRef.current = false
       setLoading(false)
     }
   }
@@ -343,6 +386,12 @@ export default function OnboardingFlow() {
         </header>
 
         <main className="ob-content">
+          {(submitError || fieldErrors.general) && (
+            <div className="mb-3 flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-xl text-xs font-bold">
+              <AlertCircle size={14} />
+              {fieldErrors.general || submitError}
+            </div>
+          )}
           {step === 1 && (
               <>
                 <div className="ob-titles"><span className="ob-eyebrow">Account</span><h2 className="ob-title">{t('setup_account')}</h2><p className="ob-subtitle">{t('details_or')} <Link to="/login">{t('login_here')}</Link></p></div>
@@ -364,8 +413,8 @@ export default function OnboardingFlow() {
                       ))}
                     </div>
                   </div>
-                  <div><label className="field-label" htmlFor="full_name">{t('full_name')}</label><input id="full_name" className="field-input" placeholder="e.g. Amani Wanjiku" value={form.full_name} onChange={e => update('full_name', e.target.value)} /></div>
-                  <div><label className="field-label" htmlFor="email">Email <span className="text-gray-400">(optional)</span></label><input id="email" className="field-input" type="email" placeholder="you@example.com" value={form.email} onChange={e => update('email', e.target.value)} /></div>
+                  <div><label className="field-label" htmlFor="full_name">{t('full_name')}</label><input id="full_name" className={`field-input ${fieldErrors.full_name ? 'border-red-400' : ''}`} placeholder="e.g. Amani Wanjiku" value={form.full_name} onChange={e => update('full_name', e.target.value)} />{fieldErrors.full_name && <p className="ob-inline-error"><AlertCircle size={10} /> {fieldErrors.full_name}</p>}</div>
+                  <div><label className="field-label" htmlFor="email">Email <span className="text-gray-400">(optional)</span></label><input id="email" className={`field-input ${fieldErrors.email ? 'border-red-400' : ''}`} type="email" placeholder="you@example.com" value={form.email} onChange={e => update('email', e.target.value)} />{fieldErrors.email && <p className="ob-inline-error"><AlertCircle size={10} /> {fieldErrors.email}</p>}</div>
                   {form.user_type === 'patient' && (
                     <div><label className="field-label" htmlFor="dob">{t('dob')}</label><input id="dob" className="field-input" type="date" value={form.date_of_birth} onChange={e => update('date_of_birth', e.target.value)} /></div>
                   )}
@@ -379,8 +428,8 @@ export default function OnboardingFlow() {
                       </select>
                     </div>
                   )}
-                  <div><label className="field-label" htmlFor="phone">{t('phone_number')}</label><input id="phone" className="field-input" placeholder="+255 712 345 678" value={form.phone_number} onChange={e => update('phone_number', e.target.value)} /></div>
-                  <div><label className="field-label" htmlFor="password">{t('password')}</label><input id="password" className="field-input" type="password" placeholder="Min 6 characters" value={form.password} onChange={e => update('password', e.target.value)} /></div>
+                  <div><label className="field-label" htmlFor="phone">{t('phone_number')}</label><input id="phone" className={`field-input ${fieldErrors.phone_number ? 'border-red-400' : ''}`} placeholder="+255 712 345 678" value={form.phone_number} onChange={e => update('phone_number', e.target.value)} />{fieldErrors.phone_number && <p className="ob-inline-error"><AlertCircle size={10} /> {fieldErrors.phone_number}</p>}</div>
+                  <div><label className="field-label" htmlFor="password">{t('password')}</label><input id="password" className={`field-input ${fieldErrors.password ? 'border-red-400' : ''}`} type="password" placeholder="Min 6 characters" value={form.password} onChange={e => update('password', e.target.value)} />{fieldErrors.password && <p className="ob-inline-error"><AlertCircle size={10} /> {fieldErrors.password}</p>}</div>
                 </div>
               </>
           )}
@@ -454,6 +503,12 @@ export default function OnboardingFlow() {
 
                 {fetchingHospitals ? (<div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin text-rose-400" /></div>) : (
                     <div className="ob-hospital-list custom-scrollbar">
+                        {fieldErrors.hospital && (
+                          <div className="ob-selected-later" style={{ borderColor: '#fecaca', color: '#dc2626' }}>
+                            <AlertCircle size={16} />
+                            <span>{fieldErrors.hospital}</span>
+                          </div>
+                        )}
                         {filteredHospitals.length === 0 && (
                           <div className="ob-empty-state">
                             <MapPin size={22} />

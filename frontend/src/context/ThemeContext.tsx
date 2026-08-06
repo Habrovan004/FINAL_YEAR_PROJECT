@@ -10,16 +10,29 @@ const ThemeContext = createContext<ThemeContextType>({
   toggle: () => {},
 })
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [dark, setDark] = useState<boolean>(() => {
-    // Persist preference across sessions
+function readTheme(): boolean {
+  try {
     return localStorage.getItem('mama-theme') === 'dark'
-  })
+  } catch {
+    return false
+  }
+}
+
+function writeTheme(dark: boolean) {
+  try {
+    localStorage.setItem('mama-theme', dark ? 'dark' : 'light')
+  } catch {
+    // Ignore storage failures in restricted browsers.
+  }
+}
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [dark, setDark] = useState<boolean>(readTheme)
 
   useEffect(() => {
     // Apply to <html> so every page picks it up via CSS [data-theme]
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
-    localStorage.setItem('mama-theme', dark ? 'dark' : 'light')
+    writeTheme(dark)
   }, [dark])
 
   const toggle = () => setDark(prev => !prev)

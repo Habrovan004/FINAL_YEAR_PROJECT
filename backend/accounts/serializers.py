@@ -117,13 +117,14 @@ class UserSerializer(serializers.ModelSerializer):
     is_onboarded = serializers.SerializerMethodField()
     hospital_id = serializers.SerializerMethodField()
     hospital_name = serializers.SerializerMethodField()
+    has_assigned_provider = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'phone_number', 'email', 'full_name', 'user_type',
             'date_of_birth', 'is_verified', 'is_onboarded',
-            'hospital_id', 'hospital_name',
+            'hospital_id', 'hospital_name', 'has_assigned_provider',
         ]
 
     def get_is_onboarded(self, obj):
@@ -153,3 +154,11 @@ class UserSerializer(serializers.ModelSerializer):
             except Hospital.DoesNotExist:
                 return None
         return None
+
+    def get_has_assigned_provider(self, obj):
+        if obj.user_type != 'patient':
+            return True
+        profile = getattr(obj, 'profile', None)
+        if not profile:
+            return False
+        return profile.assigned_provider_id is not None

@@ -144,6 +144,52 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+# Allow regex origins (useful for dynamic preview URLs like Vercel deploy previews)
+# In development, allow any localhost/127.0.0.1 port while DEBUG is on so the
+# frontend keeps working regardless of which port it ends up on.
+CORS_ALLOWED_ORIGIN_REGEXES = []
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES += [
+        r"^http://localhost:\d+$",
+        r"^http://127\\.0\\.0\\.1:\d+$",
+    ]
+# Allow Vercel preview domains matching final-year-project-*-habrovan004s-projects.vercel.app
+# (https only)
+CORS_ALLOWED_ORIGIN_REGEXES += [
+    r"^https://final-year-project-[a-z0-9-]+-habrovan004s-projects\\.vercel\\.app$",
+]
+# Production frontend origin(s) — e.g. https://your-app.vercel.app — comma
+# separated if there's more than one (a preview + a production domain).
+_extra_cors_origins = config('CORS_ALLOWED_ORIGINS', default='')
+if _extra_cors_origins:
+    CORS_ALLOWED_ORIGINS += [o.strip() for o in _extra_cors_origins.split(',') if o.strip()]
+CORS_ALLOW_CREDENTIALS = True
+
+# CSRF trusted origins — include any explicit values from env plus production origins
+# Django requires scheme (https://) for CSRF_TRUSTED_ORIGINS entries; ensure production
+# origins include a scheme. Note: Django does not support regex for CSRF_TRUSTED_ORIGINS,
+# so dynamic Vercel preview domains cannot be added via regex here. If preview domains
+# need to be trusted for CSRF, add them to the CSRF_TRUSTED_ORIGINS env var.
+CSRF_TRUSTED_ORIGINS = [
+    o for o in config('CSRF_TRUSTED_ORIGINS', default='').split(',') if o.strip()
+]
+# Add any CORS env origins to CSRF_TRUSTED_ORIGINS using https:// if scheme missing
+if _extra_cors_origins:
+    for o in [x.strip() for x in _extra_cors_origins.split(',') if x.strip()]:
+        if o.startswith('http://') or o.startswith('https://'):
+            if o not in CSRF_TRUSTED_ORIGINS:
+                CSRF_TRUSTED_ORIGINS.append(o)
+        else:
+            https_o = f'https://{o}'
+            if https_o not in CSRF_TRUSTED_ORIGINS:
+                CSRF_TRUSTED_ORIGINS.append(https_o)
+# In DEBUG also add common localhost schemes for CSRF
+if DEBUG:
+    local_csrf = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000', 'http://127.0.0.1:3000']
+    for o in local_csrf:
+        if o not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(o)
+
 # In development, Vite may fall back to alternate ports (5174, 5175, …) when
 # 5173 is taken. Allow any localhost/127.0.0.1 port while DEBUG is on so the
 # frontend keeps working regardless of which port it ends up on.

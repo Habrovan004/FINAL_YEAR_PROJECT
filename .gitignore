@@ -34,3 +34,6 @@ backend/.env
 # Local-only throwaway dev settings (SQLite fallback while Postgres is being set up)
 backend/config/settings_dev_sqlite.py
 backend/db_dev_sqlite.sqlite3
+
+backend/.env.txt
+

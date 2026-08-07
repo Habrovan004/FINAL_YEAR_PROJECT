@@ -9,12 +9,9 @@ Usage:
   python manage.py seed_providers
 
 Required env vars (set in Render dashboard or local .env):
-  PROVIDER_1_PHONE, PROVIDER_1_NAME, PROVIDER_1_PASSWORD,
-  PROVIDER_1_LICENSE, PROVIDER_1_SPEC
-  PROVIDER_2_PHONE, PROVIDER_2_NAME, PROVIDER_2_PASSWORD,
-  PROVIDER_2_LICENSE, PROVIDER_2_SPEC
-  PROVIDER_3_PHONE, PROVIDER_3_NAME, PROVIDER_3_PASSWORD,
-  PROVIDER_3_LICENSE, PROVIDER_3_SPEC
+  PROVIDER_1_PHONE, PROVIDER_1_NAME, PROVIDER_1_PASSWORD, PROVIDER_1_SPEC
+  PROVIDER_2_PHONE, PROVIDER_2_NAME, PROVIDER_2_PASSWORD, PROVIDER_2_SPEC
+  PROVIDER_3_PHONE, PROVIDER_3_NAME, PROVIDER_3_PASSWORD, PROVIDER_3_SPEC
   PROVIDER_HOSPITAL_ID  (integer, default 1)
 """
 import os
@@ -52,7 +49,6 @@ class Command(BaseCommand):
             phone    = os.environ.get(f'PROVIDER_{i}_PHONE')
             name     = os.environ.get(f'PROVIDER_{i}_NAME')
             password = os.environ.get(f'PROVIDER_{i}_PASSWORD')
-            license_ = os.environ.get(f'PROVIDER_{i}_LICENSE')
             spec     = os.environ.get(f'PROVIDER_{i}_SPEC', 'midwife')
 
             missing = [
@@ -60,7 +56,6 @@ class Command(BaseCommand):
                     f'PROVIDER_{i}_PHONE': phone,
                     f'PROVIDER_{i}_NAME': name,
                     f'PROVIDER_{i}_PASSWORD': password,
-                    f'PROVIDER_{i}_LICENSE': license_,
                 }.items() if not v
             ]
             if missing:
@@ -73,7 +68,6 @@ class Command(BaseCommand):
                 'phone': phone,
                 'name': name,
                 'password': password,
-                'license': license_,
                 'spec': spec,
             })
 
@@ -115,7 +109,6 @@ class Command(BaseCommand):
                     defaults={
                         'hospital': hospital,
                         'specialization': p['spec'],
-                        'license_number': p['license'],
                         'is_available': True,
                     }
                 )

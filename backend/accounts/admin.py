@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.forms import UserChangeForm, UserCreationForm
@@ -24,7 +25,6 @@ class ProviderProfileInline(admin.StackedInline):
     model = ProviderProfile
     fk_name = 'user'
     extra = 0
-    readonly_fields = ('current_workload',)
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
@@ -45,7 +45,7 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('phone_number', 'full_name', 'user_type', 'password', 'password2'),
+            'fields': ('phone_number', 'full_name', 'user_type', 'password1', 'password2'),
         }),
     )
     readonly_fields = ('last_login', 'created_at')
@@ -53,10 +53,10 @@ class UserAdmin(BaseUserAdmin):
 
 @admin.register(ProviderProfile)
 class ProviderProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'hospital', 'specialization', 'is_available', 'current_workload', 'max_workload')
+    list_display = ('user', 'hospital', 'specialization', 'is_available')
     list_filter = ('hospital', 'specialization', 'is_available')
-    search_fields = ('user__full_name', 'user__phone_number', 'hospital__name')
-    raw_id_fields = ('user', 'hospital') # Use raw_id_fields for FKs to avoid dropdown performance issues
+    search_fields = ('user__full_name', 'user__phone_number')
+    raw_id_fields = ('user', 'hospital')
 
 @admin.register(PasswordResetCode)
 class PasswordResetCodeAdmin(admin.ModelAdmin):
